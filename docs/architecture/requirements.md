@@ -1,6 +1,6 @@
 # Requirements and Assumptions
 
-Derived from the Phase 1–3 project briefs. The original System Design Report and Feasibility
+Derived from the Phase 1–5 project briefs. The original System Design Report and Feasibility
 Report were not available in the repository, so this list has **not** been checked against them.
 
 ## Functional requirements
@@ -17,8 +17,9 @@ Report were not available in the repository, so this list has **not** been check
 | FR8 | Repair crash leftovers only through an explicit, reported action | implemented |
 | FR9 | Report real storage statistics (logical vs unique payload, savings, ratio) | implemented |
 | FR10 | Expose all of the above through a documented HTTP API and an interactive UI | implemented |
-| FR11 | Benchmark chunking/deduplication on this machine | planned (Phase 6) |
-| FR12 | Analytical capacity model driven by stated assumptions | planned (Phase 7) |
+| FR11 | Benchmark chunking/deduplication on this machine | implemented (Phase 5) |
+| FR12 | Analytical capacity model driven by stated assumptions | implemented (Phase 5) |
+| FR13 | Isolated fault injection with verified recovery | implemented (Phase 5; off by default) |
 
 ## Non-functional requirements
 
@@ -30,7 +31,7 @@ Report were not available in the repository, so this list has **not** been check
 | NFR4 | **Determinism**: the same bytes always yield the same chunks | fixed polynomial/tables, no randomness |
 | NFR5 | **Bounded resources**: request bodies, memory per chunk and upload size are limited | body-limit middleware, 64 MiB default upload limit, streaming chunker |
 | NFR6 | **Testability**: isolated temporary stores for all tests | pytest + vitest suites |
-| NFR7 | **Honesty**: unimplemented features are labelled; no fabricated metrics | planned-endpoint registry, UI "not implemented" labels |
+| NFR7 | **Honesty**: unimplemented features are labelled; no fabricated metrics | empty states instead of invented values; simulated results labelled as a model; the planned-endpoint registry (now empty) lists anything unbuilt |
 
 ## Assumptions and constraints
 

@@ -1,7 +1,7 @@
 # Low-Level Design
 
 Each component has an interface in `backend/app/<package>/interfaces.py` (a `typing.Protocol`
-plus its exceptions). Phase 2 implemented components 1-8 (see each heading); benchmarking and simulation remain interface-only. All errors derive from
+plus its exceptions). Components 1-8 were implemented in Phase 2, 9-11 in Phase 5. All errors derive from
 `app.core.errors.ChunkVaultError`, which the API layer turns into
 `{"error": {"code", "message", "details"}}`.
 
@@ -58,14 +58,21 @@ plus its exceptions). Phase 2 implemented components 1-8 (see each heading); ben
 - **Dependencies:** repository, chunk store, hashing. **Exceptions:** `AuditError` (audit could not run; damage itself is reported as findings).
 - **Failure handling:** `reconcile` is idempotent and never deletes a chunk with `ref_count > 0`.
 
-## 9. Benchmark Runner — `benchmarking/interfaces.py` (Phase 6)
-- **Responsibility:** measure throughput and dedup ratio on an isolated store with reproducible (seeded) data.
-- **Inputs:** `BenchmarkSpec`. **Outputs:** `BenchmarkResult` + JSON in `data/benchmarks/`.
-- **Dependencies:** upload orchestrator. **Exceptions:** `BenchmarkError`.
-- **Failure handling:** never touches the user's real store; writes no result file on failure.
+## 9. Benchmark Runner — `benchmarking/{interfaces,datasets,profiler,runner,worker,jobs}.py` (implemented, Phase 5)
+- **Responsibility:** measure upload/restore latency, stage timings (exclusive, non-overlapping), throughput, dedup ratio and a CDC-vs-fixed comparison on an isolated store with reproducible (seeded) data. Runs in a separate worker process, one job at a time, bounded and cancellable.
+- **Inputs:** `BenchmarkRequest {kind, workload, size_bytes, iterations, seed}` (validated by `validate_spec`). **Outputs:** a result JSON saved under `data/benchmarks/` with parameters, environment and methodology.
+- **Dependencies:** the real uploader/restorer/chunk store on a temporary store. **Exceptions:** `InvalidBenchmarkSpec` (422), `BenchmarkError`; a job can end `failed`/`cancelled`.
+- **Failure handling:** never touches the application's store; failures are reported with path-scrubbed messages; the temporary store is removed (also on cancel/timeout).
+- **API:** `POST/GET /api/benchmarks`, `GET /api/benchmarks/{id}`, `POST /api/benchmarks/{id}/cancel`, `GET /api/benchmarks/workloads`.
 
-## 10. Capacity Simulation Engine — `simulation/interfaces.py` (Phase 7)
-- **Responsibility:** analytical projection of physical size and metadata overhead from stated assumptions.
-- **Inputs:** `SimulationParameters`. **Outputs:** `SimulationResult` (labelled model output).
-- **Dependencies:** none (pure). **Exceptions:** `SimulationError`.
-- **Failure handling:** rejects invalid parameters; touches no files or database.
+## 10. Capacity Simulation Engine — `simulation/model.py` (implemented, Phase 5)
+- **Responsibility:** mathematical projection of logical/physical storage, metadata overhead, growth and retention from stated assumptions. Not a measurement or load test.
+- **Inputs:** `SimulationRequest` (files, average size, chunks per file, duplicate %, metadata sizes, growth, retention, horizon). **Outputs:** outputs, formulas, assumptions, sweeps and a growth series.
+- **Dependencies:** none (pure function). **Exceptions:** invalid parameters are rejected by request validation (422).
+- **Failure handling:** touches no files or database. **API:** `POST /api/simulations`.
+
+## 11. Fault Injection Lab — `reliability/faultlab.py` (implemented, Phase 5; disabled by default)
+- **Responsibility:** run one of nine built-in failure scenarios against the real upload/restore/delete/recovery code in a private temporary store, then audit, recover (explicit reconcile, twice) and verify invariants by restoring files.
+- **Inputs:** a scenario id only. **Outputs:** steps, expected-vs-observed, SQLite/filesystem state, recovery actions, invariants and a backend-computed `recovery_status`.
+- **Dependencies:** the real services (built on the temporary store), `Uploader.checkpoint` seam. **Exceptions:** `FaultLabDisabledError` (403), `UnknownScenarioError` (422), `ConflictError` (409).
+- **Failure handling:** the temporary store is always removed; refuses to run if it could overlap application data. **API:** `GET /api/reliability/scenarios`, `POST /api/reliability/experiments`.

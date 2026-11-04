@@ -167,7 +167,7 @@ def test_experiments_never_touch_the_application_data_directory(lab_settings):
 def test_application_store_is_untouched_while_experiments_run(tmp_path):
     s = Settings(data_dir=tmp_path / "d", db_path=tmp_path / "d" / "app.db",
                  cors_origins=("http://localhost:5173",), fault_lab_enabled=True)
-    with TestClient(create_app(s), raise_server_exceptions=False) as c:
+    with TestClient(create_app(s), raise_server_exceptions=False, base_url="http://localhost") as c:
         data = make_data(50, 100_000)
         f = c.post("/api/files", files={"file": ("real.bin", data)}).json()
         snap = (s.db_path.read_bytes(), sorted(p.name for p in s.chunks_dir.rglob("*") if p.is_file()))
@@ -205,7 +205,7 @@ def test_disabled_by_default_and_by_environment(client, settings):
 def test_api_runs_a_scenario_when_enabled_and_validates_input(tmp_path):
     s = Settings(data_dir=tmp_path / "d", db_path=tmp_path / "d" / "app.db",
                  cors_origins=("http://localhost:5173",), fault_lab_enabled=True)
-    with TestClient(create_app(s), raise_server_exceptions=False) as c:
+    with TestClient(create_app(s), raise_server_exceptions=False, base_url="http://localhost") as c:
         assert c.get("/api/reliability/scenarios").json()["enabled"] is True
         ok = c.post("/api/reliability/experiments", json={"scenario_id": "metadata_failure"}).json()
         assert ok["recovery_status"] == "verified_clean" and ok["isolation"]["temporary_store_removed"] is True

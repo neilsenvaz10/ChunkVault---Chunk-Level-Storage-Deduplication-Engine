@@ -32,7 +32,7 @@ class CDCConfig:
     """Parameters of the Rabin-style content-defined chunker.
 
     See docs/architecture/cdc-specification.md for how these are used.
-    The algorithm itself is implemented in Phase 2; Phase 1 only owns and
+    The algorithm is implemented in app/chunking/rabin.py; this class owns and
     validates the parameters.
     """
 
@@ -80,6 +80,8 @@ class Settings:
     # The fault lab damages ONLY temporary stores it creates itself, but it is still off unless
     # explicitly enabled (CHUNKVAULT_ENABLE_FAULT_LAB=1).
     fault_lab_enabled: bool = False
+    # Host header allow-list (DNS-rebinding defence). Override with CHUNKVAULT_ALLOWED_HOSTS.
+    allowed_hosts: tuple[str, ...] = ("localhost", "127.0.0.1", "[::1]")
     app_name: str = APP_NAME
     app_version: str = APP_VERSION
 
@@ -88,6 +90,8 @@ class Settings:
             raise ConfigurationError("max_upload_bytes must be positive")
         if self.writer_lock_timeout_seconds < 0 or self.staging_stale_seconds < 0:
             raise ConfigurationError("timeouts must not be negative")
+        if not self.allowed_hosts or "*" in self.allowed_hosts:
+            raise ConfigurationError("allowed_hosts must be an explicit, non-empty list (no '*')")
         if not self.cors_origins:
             raise ConfigurationError("at least one CORS origin is required")
         for origin in self.cors_origins:
@@ -164,5 +168,6 @@ class Settings:
             max_upload_bytes=get_int("MAX_UPLOAD_BYTES", 64 * 1024 * KIB),
             writer_lock_timeout_seconds=get_float("WRITER_LOCK_TIMEOUT_SECONDS", 30.0),
             staging_stale_seconds=get_float("STAGING_STALE_SECONDS", 300.0),
+            allowed_hosts=tuple(h.strip() for h in (get("ALLOWED_HOSTS") or "localhost,127.0.0.1,[::1]").split(",") if h.strip()),
             fault_lab_enabled=(get("ENABLE_FAULT_LAB") or "").strip().lower() in ("1", "true", "yes"),
         )

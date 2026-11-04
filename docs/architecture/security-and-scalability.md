@@ -6,6 +6,8 @@
 |---|---|
 | Authentication / authorization | **None.** Anyone who can reach the API can read, upload and delete. Intended for localhost use only. |
 | CORS | Explicit allow-list of development origins; `*` is rejected at startup. |
+| Cross-site requests | A guard middleware rejects any POST/DELETE that carries an `Origin` header outside the allow-list (403 `origin_not_allowed`), because multipart uploads and body-less POSTs are "simple requests" that browsers send without a CORS preflight. |
+| DNS rebinding | The `Host` header must be `localhost`, `127.0.0.1` or `[::1]` (configurable with `CHUNKVAULT_ALLOWED_HOSTS`, never `*`); anything else gets 400 `host_not_allowed`. |
 | Input validation | Pydantic schemas; file ids and digests are validated by pattern before use; table names for inspection come from a whitelist enum. |
 | Path traversal | Chunk paths are derived only from a validated 64-hex digest; uploaded filenames are reduced to their last path component and never used as storage paths. |
 | Request size | A body-limit middleware rejects oversize requests before multipart parsing (413), by declared length and by bytes actually received. |
@@ -22,7 +24,7 @@
 - **Single machine, single disk.** No replication, no redundancy. Detection of corruption does not imply recovery: damaged chunks cannot be repaired.
 - **SQLite.** One database file; suitable for the prototype's data volume, not for billions of chunks.
 - **One file per chunk.** Many small files; directory and inode overhead grows with chunk count.
-- **Pure-Python chunker.** Throughput is a few MB/s (Phase 6 will measure it); the upload limit exists for this reason.
+- **Pure-Python chunker.** Measured end-to-end throughput is about 2-4 MiB/s on the benchmark machine ([benchmarking.md](benchmarking.md)); the upload limit exists for this reason.
 - **Whole-file buffering after multipart parsing.** A large upload is received into a temporary file, then copied to staging; temporary disk use is up to about twice the upload size for the duration of the request.
 - **No resumable uploads.** A retry restarts the upload and reuses already-published valid chunks.
 - **No garbage-collection scheduling.** Reclamation happens on delete; leftovers require an explicit reconcile.

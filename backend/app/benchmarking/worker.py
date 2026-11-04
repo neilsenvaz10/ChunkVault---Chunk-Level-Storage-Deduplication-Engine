@@ -18,6 +18,7 @@ from pathlib import Path
 from app.benchmarking.interfaces import validate_spec
 from app.benchmarking.runner import run_benchmark
 from app.core.config import CDCConfig
+from app.core.errors import scrub_paths
 
 
 def _write_json(path: Path, payload: dict, *, attempts: int = 50) -> None:
@@ -63,7 +64,7 @@ def main(argv: list[str]) -> int:
         traceback.print_exc(file=sys.stderr)
         _write_json(result_path, {"job_id": raw.get("job_id"), "status": "failed", "started_at": started,
                                   "finished_at": datetime.now(timezone.utc).isoformat(),
-                                  "error": f"{type(exc).__name__}: {exc}"[:300]})
+                                  "error": scrub_paths(f"{type(exc).__name__}: {exc}")[:300]})
         return 1
 
 

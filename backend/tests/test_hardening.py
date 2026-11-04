@@ -24,7 +24,7 @@ LIMIT = 5000
 def small_client(tmp_path):
     s = Settings(data_dir=tmp_path / "d", db_path=tmp_path / "d" / "x.db",
                  cors_origins=("http://localhost:5173",), max_upload_bytes=LIMIT, staging_stale_seconds=0)
-    with TestClient(create_app(s), raise_server_exceptions=False) as c:
+    with TestClient(create_app(s), raise_server_exceptions=False, base_url="http://localhost") as c:
         calls = {"n": 0}
         orig = c.app.state.services.uploader.upload
 

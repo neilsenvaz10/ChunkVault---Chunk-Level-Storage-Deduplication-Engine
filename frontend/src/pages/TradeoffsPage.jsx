@@ -37,7 +37,7 @@ export const TRADEOFFS = [
     id: 'cpu', title: 'Storage savings vs CPU overhead', chosen: 'Accept CPU cost for savings',
     pros: ['Duplicate content is stored once, so payload storage can shrink'],
     cons: ['Every byte is fingerprinted and hashed, and existing chunks are re-verified on reuse', 'Pure-Python chunking is slow; savings depend entirely on how much data repeats'],
-    why: 'Whether the trade pays off is an empirical question. The Performance page is reserved for real measurements (Phase 6) and shows none until they exist.',
+    why: 'Whether the trade pays off is an empirical question. The Performance page reports real measurements from benchmarks run on this machine, and shows none until one has been run.',
     scaled: 'Native or vectorised chunkers, hardware SHA acceleration and caching of verified chunks would reduce the cost.',
   },
   {

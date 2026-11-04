@@ -10,6 +10,16 @@ from __future__ import annotations
 from typing import Any
 
 
+import re
+
+_PATH = re.compile(r"(?:[A-Za-z]:)?[\\/](?:[^\\/\s'\"<>|:]+[\\/])+[^\\/\s'\"<>|:]*")
+
+
+def scrub_paths(text: str) -> str:
+    """Replace filesystem paths in an exception message so they never reach an API response."""
+    return _PATH.sub("<path>", text)
+
+
 class ChunkVaultError(Exception):
     """Base class for all expected (non-bug) errors."""
 

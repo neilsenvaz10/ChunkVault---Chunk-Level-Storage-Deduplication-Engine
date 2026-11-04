@@ -23,7 +23,7 @@ from typing import Any
 
 from app.benchmarking.interfaces import MAX_RUNTIME_SECONDS, BenchmarkSpec
 from app.core.config import CDCConfig
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import ConflictError, NotFoundError, scrub_paths
 
 JOB_ID = re.compile(r"^[0-9a-f]{12}$")
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -100,7 +100,7 @@ class BenchmarkJobs:
             tail = ""
             try:
                 lines = [l for l in self._p(job.job_id, "log").read_text(errors="replace").splitlines() if l.strip()]
-                tail = lines[-1][:200] if lines else ""
+                tail = scrub_paths(lines[-1])[:200] if lines else ""
             except OSError:
                 pass
             self._p(job.job_id, "json").write_text(json.dumps({

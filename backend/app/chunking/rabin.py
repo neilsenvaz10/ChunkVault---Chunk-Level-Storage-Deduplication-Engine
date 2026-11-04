@@ -23,7 +23,7 @@ tested and the chunk is cut after byte ``L`` when ``F mod D == D - 1`` with
 The final chunk is whatever remains and may be shorter than ``min``.
 Bytes before ``min - W`` can never influence a cut, so they are skipped.
 
-This is pure Python (~1-2 MB/s); throughput is measured in Phase 6.
+This is pure Python (a few MiB/s on the benchmark machine); see docs/architecture/benchmarking.md.
 """
 
 from __future__ import annotations

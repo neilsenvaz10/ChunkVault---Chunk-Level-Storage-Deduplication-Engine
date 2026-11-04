@@ -4,7 +4,7 @@ A System Design micro-project: a single-machine prototype that splits files into
 content-defined chunks (Rabin-style CDC), identifies them by SHA-256, stores each
 unique chunk once in a content-addressed local store, and keeps file→chunk mappings in SQLite.
 
-**Status: Phase 2 — backend storage engine.** Upload, Rabin CDC, SHA-256 deduplication,
+**Status: phases 1-6 implemented** (see `docs/roadmap/phases.md`; final evidence in `docs/verification/`). Upload, Rabin CDC, SHA-256 deduplication,
 the content-addressed chunk store, verified restore, reference-counted delete, the read-only
 integrity audit, explicit reconciliation and storage statistics work through the API.
 The React app (Phase 3) exposes all of it: upload, chunk-level inspection and comparison, restore,
@@ -26,7 +26,9 @@ python -m venv .venv
 API docs: http://127.0.0.1:8000/api/docs · health: http://127.0.0.1:8000/api/health
 
 Example: `curl -F file=@some.bin http://127.0.0.1:8000/api/files`, then `GET /api/storage/stats`.
-End-to-end check on a throw-away store: `.venv/Scripts/python ../scripts/verify_phase2.py`.
+End-to-end checks on throw-away stores: `.venv/Scripts/python ../scripts/verify_phase2.py` (27 checks) and `../scripts/verify_phase6.py` (74 checks: independent re-chunking, database integrity, nine fault scenarios, benchmark and model checks).
+
+**Security:** there is no authentication. Keep the default bind (`127.0.0.1`; never pass `--host 0.0.0.0`); the API accepts only local `Host` headers and rejects cross-site modification requests. See `docs/verification/security-review.md`.
 
 Frontend (from `frontend/`; Node 18+):
 
@@ -47,12 +49,13 @@ cd frontend && npm run build                     # production build check
 
 | Path | Contents |
 |---|---|
-| `backend/app/` | FastAPI app; one package per component, each with an `interfaces.py` |
+| `backend/app/` | FastAPI app; one package per component (most with an `interfaces.py` or protocol definitions) |
 | `backend/app/database/` | `schema.sql`, connection/transaction helpers, initialisation |
 | `backend/tests/` | pytest suite |
 | `frontend/src/` | React + Vite shell |
 | `data/` | runtime chunk store, staging area, benchmark output (contents git-ignored) |
-| `docs/` | architecture, database, API, decisions, roadmap |
+| `docs/` | architecture, database, API, decisions, roadmap, verification (final report, security review, demo guide, traceability) |
+| `scripts/` | independent verification scripts |
 
-Start with `docs/architecture/hld.md`, then `lld.md`, `docs/database/schema.md`,
+For a presentation use `docs/verification/demo-guide.md`. Otherwise start with `docs/architecture/hld.md`, then `lld.md`, `docs/database/schema.md`,
 `docs/architecture/consistency-protocol.md`, and `docs/decisions/`.

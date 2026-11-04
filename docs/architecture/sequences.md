@@ -1,4 +1,4 @@
-# Sequence Diagrams (planned behaviour — not implemented in Phase 1)
+# Sequence Diagrams (the implemented upload and restore behaviour)
 
 ## Upload
 
@@ -52,7 +52,7 @@ sequenceDiagram
     participant H as SHA-256
 
     U->>UI: click restore
-    UI->>API: GET /api/files/{id}/content
+    UI->>API: GET /api/files/{id}/download
     API->>R: restore(file_id)
     R->>DB: file (must be complete) + file_chunks ordered by chunk_index
     alt not found / not complete

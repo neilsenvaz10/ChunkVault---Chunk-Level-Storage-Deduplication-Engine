@@ -1,6 +1,6 @@
 # Data Flow and API Communication
 
-## Upload data flow (planned)
+## Upload data flow (implemented)
 
 ```mermaid
 flowchart TD

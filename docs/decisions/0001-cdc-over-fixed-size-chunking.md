@@ -23,7 +23,7 @@ Use content-defined chunking: boundaries come from a rolling Rabin-style fingerp
 - No advantage for in-place edits, where both schemes change about one chunk, and no guaranteed advantage on every dataset.
 
 ## Consequences
-Chunk boundaries are a function of content only, so the chunker is deterministic. The 16 KiB target is a design parameter: measured means vary with the data. Real reuse is measured by the Phase 6 benchmarks and shown live in the chunking demo on generated data.
+Chunk boundaries are a function of content only, so the chunker is deterministic. The 16 KiB target is a design parameter: measured means vary with the data. Measured reuse is reported in [benchmarking.md](../architecture/benchmarking.md) and shown live in the chunking demo on generated data.
 
 ## Scalability implications
 Chunking is independent per file, so a larger system could run it in parallel workers on separate files. ChunkVault itself processes files sequentially and does not implement this.

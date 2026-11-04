@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
 from app.benchmarking.jobs import BenchmarkJobs
+from app.api.guard import LocalAccessGuard
 from app.api.limits import BodyLimitMiddleware
 from app.api.router import api_router
 from app.core.config import Settings
@@ -37,8 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=settings.app_version,
         description=(
             "Chunk-level storage deduplication engine (single process, sequential "
-            "writes: run with ONE worker). Benchmark and simulation endpoints are "
-            "still planned; see /api/planned-endpoints."
+            "writes: run with ONE worker). No authentication: local use only."
         ),
         lifespan=lifespan,
         # under /api so the dev proxy reaches them and the SPA keeps its own /docs route
@@ -57,6 +57,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Content-Type"],
         expose_headers=["Content-Disposition", "X-ChunkVault-SHA256"],
     )
+    # Outermost: reject foreign Host headers and cross-site modification requests before anything else runs.
+    app.add_middleware(LocalAccessGuard, allowed_hosts=settings.allowed_hosts, allowed_origins=settings.cors_origins)
     register_exception_handlers(app)
     app.include_router(api_router)
     return app

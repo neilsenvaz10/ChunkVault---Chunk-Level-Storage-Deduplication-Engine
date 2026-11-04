@@ -12,6 +12,7 @@ h1 { font-size: 1.4rem; margin: 0; }
 h2 { font-size: 0.95rem; margin: 0; }
 h3 { font-size: 0.85rem; margin: 1rem 0 0.4rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 code { font-family: ui-monospace, Consolas, monospace; font-size: 0.85em; color: var(--accent); }
+td code { overflow-wrap: anywhere; } /* long ids must wrap, not widen the page on phones */
 a { color: var(--accent); }
 .muted { color: var(--muted); }
 .empty { color: var(--muted); font-style: italic; padding: 0.5rem 0; }

@@ -48,8 +48,9 @@ flowchart LR
     BENCH --> ORCH
 ```
 
-Phase 2 implements every box except the benchmark runner and capacity simulation engine
-(interfaces only, Phases 6-7). The React client (Phases 3-4) is an interactive view of the real API, with step-by-step upload/restore lifecycles, a chunking explorer, a consistency-protocol visualisation and an API explorer ([explainability.md](explainability.md)): dashboard, file storage with a chunk explorer and file comparison, architecture diagrams, a read-only database explorer, the integrity audit and the documentation viewer.
+Every box in the diagram is implemented (Phases 2 and 5): the benchmark runner runs in a separate worker process, and the capacity
+simulation engine is a pure mathematical model. The fault-injection lab (`reliability/faultlab.py`, off by default) is a test harness
+that is not part of the request path and therefore not drawn. The React client (Phases 3-4) is an interactive view of the real API, with step-by-step upload/restore lifecycles, a chunking explorer, a consistency-protocol visualisation and an API explorer ([explainability.md](explainability.md)): dashboard, file storage with a chunk explorer and file comparison, architecture diagrams, a read-only database explorer, the integrity audit and the documentation viewer.
 
 ## Components, responsibilities and dependencies
 

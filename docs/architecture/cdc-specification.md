@@ -1,6 +1,6 @@
 # CDC Specification (Rabin-style content-defined chunking)
 
-Status: **implemented in Phase 2** in `backend/app/chunking/rabin.py` (parameters in `CDCConfig`, `backend/app/core/config.py`). Pure Python; throughput is measured in Phase 6.
+Status: **implemented in Phase 2** in `backend/app/chunking/rabin.py` (parameters in `CDCConfig`, `backend/app/core/config.py`). Pure Python; measured throughput is in [benchmarking.md](benchmarking.md).
 
 ## Parameters
 
@@ -56,5 +56,5 @@ class Chunker(Protocol):
     def chunk_stream(self, stream: BinaryIO) -> Iterator[Chunk]: ...
 ```
 
-Phase 2 correctness tests will cover: reassembly equals input, size bounds, determinism,
+Correctness tests (`backend/tests/test_cdc.py`) cover: reassembly equals input, size bounds, determinism,
 empty input, boundary stability after a prefix insertion, and forced max-size cuts.

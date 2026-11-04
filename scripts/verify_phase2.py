@@ -41,7 +41,7 @@ def main() -> int:
         tmp_path = Path(tmp)
         settings = Settings(data_dir=tmp_path / "data", db_path=tmp_path / "data" / "verify.db",
                             cors_origins=("http://localhost:5173",), staging_stale_seconds=0)
-        with TestClient(create_app(settings), raise_server_exceptions=False) as c:
+        with TestClient(create_app(settings), raise_server_exceptions=False, base_url="http://localhost") as c:
             def put(data, name):
                 r = c.post("/api/files", files={"file": (name, data, "application/octet-stream")})
                 assert r.status_code == 201, r.text

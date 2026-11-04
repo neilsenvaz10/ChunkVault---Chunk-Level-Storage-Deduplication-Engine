@@ -45,7 +45,7 @@ def test_upload_without_a_file_is_a_validation_error(client):
 def test_oversized_upload_rejected(tmp_path):
     s = Settings(data_dir=tmp_path / "d", db_path=tmp_path / "d" / "x.db",
                  cors_origins=("http://localhost:5173",), max_upload_bytes=5000)
-    with TestClient(create_app(s), raise_server_exceptions=False) as c:
+    with TestClient(create_app(s), raise_server_exceptions=False, base_url="http://localhost") as c:
         err(upload(c, b"x" * 2_000_000), 413, "upload_too_large")  # caught by Content-Length
         assert upload(c, b"x" * 5000).status_code == 201
         assert c.get("/api/files").json()["total"] == 1
