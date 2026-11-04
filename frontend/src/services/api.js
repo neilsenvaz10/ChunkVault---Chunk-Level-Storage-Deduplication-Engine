@@ -99,6 +99,16 @@ export const api = {
   chunkingDemo: (params = {}, signal) => request(`/api/system/chunking-demo${qs(params)}`, { signal }),
   // FastAPI's generated contract, used by the API explorer (never hand-copied).
   openapi: (signal) => request('/api/openapi.json', { signal }),
+  // Phase 5
+  reliabilityScenarios: (signal) => request('/api/reliability/scenarios', { signal }),
+  runExperiment: (scenarioId, signal) =>
+    request('/api/reliability/experiments', { method: 'POST', body: { scenario_id: scenarioId }, signal }),
+  benchmarkCatalog: (signal) => request('/api/benchmarks/workloads', { signal }),
+  listBenchmarks: (signal) => request('/api/benchmarks', { signal }),
+  getBenchmark: (id, signal) => request(`/api/benchmarks/${encodeURIComponent(id)}`, { signal }),
+  startBenchmark: (body, signal) => request('/api/benchmarks', { method: 'POST', body, signal }),
+  cancelBenchmark: (id, signal) => request(`/api/benchmarks/${encodeURIComponent(id)}/cancel`, { method: 'POST', signal }),
+  simulate: (body, signal) => request('/api/simulations', { method: 'POST', body, signal }),
   audit: (body = {}, signal) => request('/api/integrity/audit', { method: 'POST', body, signal }),
   reconcile: (signal) => request('/api/integrity/reconcile', { method: 'POST', signal }),
 }

@@ -181,13 +181,13 @@ def test_no_internal_paths_in_responses(client, settings):
         assert str(settings.data_dir) not in t and "chunks" + "\\" not in t
 
 
-def test_openapi_lists_storage_endpoints_and_registry_only_has_the_unbuilt(client):
+def test_openapi_lists_storage_endpoints_and_nothing_is_left_planned(client):
     paths = client.get("/api/openapi.json").json()["paths"]
     for p in ("/api/files", "/api/files/{file_id}", "/api/files/{file_id}/download", "/api/chunks",
               "/api/storage/stats", "/api/integrity/audit"):
         assert p in paths
     planned = {e["path"] for e in client.get("/api/planned-endpoints").json()["endpoints"]}
-    assert planned == {"/api/benchmarks", "/api/simulations"}
+    assert planned == set()  # everything that was planned has been implemented
 
 
 def test_upload_response_reports_per_chunk_decisions(client):

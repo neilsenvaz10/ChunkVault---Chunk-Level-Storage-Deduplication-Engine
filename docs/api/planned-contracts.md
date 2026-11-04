@@ -24,6 +24,15 @@ Interactive docs for what is actually served: `/api/docs` and `/api/openapi.json
 | GET | `/api/inspect/schema` | `200 SchemaResponse`: whitelisted tables, columns, primary/foreign keys, row counts, ref-count invariant status |
 | GET | `/api/inspect/tables/{table}/rows?limit&offset` | `200 TableRowsResponse` for `files`, `chunks`, `file_chunks` or `operations` only (read-only, paginated, max 200 rows) |
 
+| GET | `/api/reliability/scenarios` | `200 ScenarioListResponse`: the nine built-in fault scenarios, their declared expectations, safety rules and whether the lab is enabled |
+| POST | `/api/reliability/experiments` | body `{scenario_id}` → `200` experiment result (steps, expected vs observed, SQLite and filesystem state, recovery actions, invariants, backend-computed `recovery_status`); `403 fault_lab_disabled` unless `CHUNKVAULT_ENABLE_FAULT_LAB=1`; `409` if another experiment runs; `422 unknown_scenario` / validation. Runs only against its own temporary store. |
+| GET | `/api/benchmarks/workloads` | `200 WorkloadCatalog`: workloads, comparison cases, limits, methodology |
+| POST | `/api/benchmarks` | `BenchmarkRequest {kind, workload?, size_bytes?, iterations, seed, fixed_chunk_bytes?}` → `202 {job_id}`; `409` if one is running; `422 invalid_benchmark` (bounds, budget). Runs in a worker process on a temporary store |
+| GET | `/api/benchmarks` | `200`: the running job (if any) and saved result summaries, newest first |
+| GET | `/api/benchmarks/{job_id}` | `200 JobStatus {status: running|done|failed|cancelled, progress, result, error}` |
+| POST | `/api/benchmarks/{job_id}/cancel` | `200` cancelled; `404` if not running |
+| POST | `/api/simulations` | `SimulationRequest` (file count, average size, chunks per file, duplicate %, metadata sizes, growth %, retention, horizon) → `200 SimulationResponse`: outputs, formulas, assumptions, sweeps and growth series. A pure mathematical model: reads and writes nothing |
+
 Run uvicorn with a single worker; mutating endpoints are serialised by a writer lock. Request bodies are bounded before parsing: `POST /api/files` allows `max_upload_bytes` + 1 MiB overhead, everything else 1 MiB; violations return `413 upload_too_large` (or `400 invalid_content_length`).
 
 ## Error envelope (all non-2xx)
@@ -35,14 +44,9 @@ Run uvicorn with a single worker; mutating endpoints are serialised by a writer 
 Codes: `validation_error` (422), `not_found` (404), `method_not_allowed` (405), `internal_error` (500),
 plus domain codes from `ChunkVaultError` subclasses.
 
-## Planned — NOT implemented, NOT registered (requests return 404)
+## Planned
 
-Schemas exist in `backend/app/schemas/operations.py` but are not wired to routes.
-
-| Method | Path | Request | Response | Phase |
-|---|---|---|---|---|
-| POST | `/api/benchmarks` | `BenchmarkRequest` | `BenchmarkResponse` | 6 |
-| POST | `/api/simulations` | `SimulationRequest` | `SimulationResponse` | 7 |
+Nothing is planned any more: `GET /api/planned-endpoints` returns an empty list. The Phase 5 endpoints below are implemented.
 
 ## Storage statistics
 

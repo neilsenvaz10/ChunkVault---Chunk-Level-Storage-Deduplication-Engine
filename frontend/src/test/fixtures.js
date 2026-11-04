@@ -147,3 +147,4 @@ export const openapi = {
     FileListResponse: { type: 'object', properties: { total: { type: 'integer' } } },
   } },
 }
+export * from './fixtures5'

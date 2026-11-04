@@ -13,12 +13,9 @@ from app.schemas.planned import PlannedEndpoint, PlannedEndpointsResponse
 
 router = APIRouter(tags=["meta"])
 
-PLANNED_ENDPOINTS: tuple[PlannedEndpoint, ...] = (
-    PlannedEndpoint(method="POST", path="/api/benchmarks", summary="Run a local benchmark",
-                    request_schema="BenchmarkRequest", response_schema="BenchmarkResponse", phase=6),
-    PlannedEndpoint(method="POST", path="/api/simulations", summary="Run the analytical capacity model",
-                    request_schema="SimulationRequest", response_schema="SimulationResponse", phase=7),
-)
+# Nothing is planned any more: benchmark and simulation endpoints are implemented. The endpoint
+# stays so clients can still ask, and the registry stays the single place new plans would be listed.
+PLANNED_ENDPOINTS: tuple[PlannedEndpoint, ...] = ()
 
 
 @router.get(

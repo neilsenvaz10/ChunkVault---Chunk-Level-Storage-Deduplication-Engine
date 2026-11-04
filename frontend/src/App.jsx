@@ -8,8 +8,9 @@ import DatabasePage from './pages/DatabasePage'
 import DocsPage from './pages/DocsPage'
 import FileDetailPage from './pages/FileDetailPage'
 import FilesPage from './pages/FilesPage'
-import { PerformancePage, SimulationPage } from './pages/PlannedPages'
+import PerformancePage from './pages/PerformancePage'
 import ReliabilityPage from './pages/ReliabilityPage'
+import SimulationPage from './pages/SimulationPage'
 import TradeoffsPage from './pages/TradeoffsPage'
 
 export default function App() {

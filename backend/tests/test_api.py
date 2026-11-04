@@ -2,7 +2,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from app.core.errors import ConflictError
-from app.schemas import files, operations
+from app.schemas import files, simulation
 from app.api.planned import PLANNED_ENDPOINTS
 
 
@@ -109,9 +109,9 @@ def test_unhandled_error_hides_internals(app, client):
 
 # ---- planned endpoints are not functional ---------------------------------
 
-def test_planned_listing_is_marked_planned(client):
+def test_planned_listing_reflects_the_registry(client):
     body = client.get("/api/planned-endpoints").json()
-    assert len(body["endpoints"]) == len(PLANNED_ENDPOINTS) > 0
+    assert len(body["endpoints"]) == len(PLANNED_ENDPOINTS)
     assert all(e["status"] == "planned" for e in body["endpoints"])
 
 
@@ -119,24 +119,17 @@ def test_planned_endpoints_are_not_registered(client, app):
     registered = {(m, r.path) for r in app.routes for m in getattr(r, "methods", ())}
     for e in PLANNED_ENDPOINTS:
         assert (e.method, e.path) not in registered
-    assert client.post("/api/benchmarks").status_code == 404
-    assert client.post("/api/simulations").status_code == 404
 
 
-def test_planned_schemas_exist_and_validate():
-    for e in PLANNED_ENDPOINTS:
-        for name in (e.request_schema, e.response_schema):
-            if name and "/" not in name:
-                assert hasattr(files, name) or hasattr(operations, name), name
-    ok = operations.SimulationRequest(
-        logical_data_tb=1, assumed_dedup_ratio=2, avg_chunk_size_bytes=16384
-    )
-    assert ok.months == 12
-    with pytest.raises(ValueError):
-        operations.SimulationRequest(logical_data_tb=1, assumed_dedup_ratio=0.5, avg_chunk_size_bytes=1)
+def test_phase5_endpoints_are_implemented_and_no_longer_planned(client):
+    assert PLANNED_ENDPOINTS == ()
+    assert client.get("/api/benchmarks/workloads").status_code == 200
+    assert client.post("/api/simulations", json={}).status_code == 200
+
+
+def test_schemas_validate():
     with pytest.raises(ValueError):
         files.FileChunkInfo(chunk_index=0, chunk_hash="zz", chunk_size=1, ref_count=0)
-
-
-def test_health_exposes_upload_limit(client, settings):
-    assert client.get("/api/health").json()["max_upload_bytes"] == settings.max_upload_bytes
+    with pytest.raises(ValueError):
+        simulation.SimulationRequest(duplicate_percent=101)
+    assert simulation.SimulationRequest().retention_months == 0

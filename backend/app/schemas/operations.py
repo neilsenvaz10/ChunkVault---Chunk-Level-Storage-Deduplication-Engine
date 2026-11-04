@@ -1,11 +1,11 @@
-"""Integrity/reconciliation schemas (implemented) and benchmark/simulation
-schemas (PLANNED, Phases 6-7; no routes use them yet)."""
+"""Integrity / reconciliation schemas. (Benchmark and simulation schemas live in schemas/benchmark.py
+and schemas/simulation.py.)"""
 
 from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 FindingKindLiteral = Literal[
     "missing_chunk_file", "corrupt_chunk", "orphan_chunk_file", "unreferenced_chunk", "pending_chunk",
@@ -48,44 +48,3 @@ class ReconcileResponse(BaseModel):
 
     actions: list[RepairActionModel]
     remaining: IntegrityCheckResponse
-
-
-class BenchmarkRequest(BaseModel):
-    """PLANNED POST /api/benchmarks. Runs against caller-supplied or generated datasets."""
-
-    dataset: Literal["uploaded_files", "generated_random", "generated_shifted"]
-    size_bytes: int = Field(gt=0, le=1024**3)
-    repetitions: int = Field(default=3, ge=1, le=20)
-
-
-class BenchmarkResponse(BaseModel):
-    operation_id: int
-    chunks_per_second: float = Field(ge=0)
-    throughput_mib_per_second: float = Field(ge=0)
-    dedup_ratio: float = Field(ge=0)
-    note: str = "Measured on this machine; not a distributed-system benchmark."
-
-
-class SimulationRequest(BaseModel):
-    """PLANNED POST /api/simulations. Analytical capacity model, not a measurement."""
-
-    logical_data_tb: float = Field(gt=0)
-    assumed_dedup_ratio: float = Field(ge=1.0)
-    avg_chunk_size_bytes: int = Field(gt=0)
-    metadata_bytes_per_chunk: int = Field(default=100, gt=0)
-    growth_rate_per_month: float = Field(default=0.0, ge=0.0)
-    months: int = Field(default=12, ge=1, le=120)
-
-    @model_validator(mode="after")
-    def _growth_is_a_fraction(self) -> SimulationRequest:
-        if self.growth_rate_per_month > 10:
-            raise ValueError("growth_rate_per_month is a fraction (0.05 = 5%), not a percentage")
-        return self
-
-
-class SimulationResponse(BaseModel):
-    physical_data_tb: float
-    chunk_count: int
-    metadata_gb: float
-    assumptions: SimulationRequest
-    note: str = "Model output derived from the stated assumptions; not measured data."

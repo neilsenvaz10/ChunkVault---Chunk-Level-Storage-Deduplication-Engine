@@ -65,7 +65,16 @@ def sanitize_filename(raw: str | None) -> str:
     return name
 
 
+def _no_checkpoint(_name: str) -> None:
+    return None
+
+
 class Uploader:
+    # Named points in the protocol (staged, t1_committed, chunk_published, chunks_ready,
+    # in_t2, after_commit). Production leaves this a no-op; the isolated fault lab and tests
+    # replace it to raise a failure at exactly that point of the real code path.
+    checkpoint = staticmethod(_no_checkpoint)
+
     def __init__(
         self,
         settings: Settings,
@@ -95,10 +104,12 @@ class Uploader:
         published: list[str] = []  # chunks THIS upload created on disk
         try:
             size, whole_sha = self._stage_upload(stream, part)
+            self.checkpoint("staged")
             with transaction(conn):  # T1
                 self._repo.create_file(conn, file_id, name, size)
                 file_row_created = True
                 op_id = self._repo.start_operation(conn, OperationType.UPLOAD, file_id)
+            self.checkpoint("t1_committed")
 
             manifest: list[tuple[int, str, int]] = []
             outcomes: list[ChunkOutcome] = []
@@ -126,6 +137,7 @@ class Uploader:
                                 staged = self._store.stage(h, chunk.data)
                                 if self._store.publish(staged):
                                     published.append(h)
+                                self.checkpoint("chunk_published")
                                 bytes_written += chunk.size
                                 new_chunks += 1
                             else:  # ADOPT
@@ -135,6 +147,7 @@ class Uploader:
 
             if sum(m[2] for m in manifest) != size:
                 raise UploadError("chunk sizes do not add up to the uploaded size")
+            self.checkpoint("chunks_ready")
             for h in known:  # step 5: everything the manifest needs is on disk
                 if not self._store.exists(h):
                     raise UploadError("a required chunk is missing before metadata commit")
@@ -142,10 +155,12 @@ class Uploader:
             with transaction(conn):  # T2: the only place a file becomes 'complete'
                 for h, csize in to_register:
                     self._repo.register_chunk(conn, h, csize, ChunkState.STORED)
+                self.checkpoint("in_t2")
                 for index, h, csize in manifest:
                     self._repo.append_file_chunk(conn, file_id, index, h, csize)
                 self._repo.set_file_status(conn, file_id, FileStatus.COMPLETE, sha256=whole_sha)
                 self._repo.finish_operation(conn, op_id, OperationStatus.SUCCEEDED)
+            self.checkpoint("after_commit")
             part.unlink(missing_ok=True)  # step 7: the file is durable in the store now
             return UploadResult(file_id, name, size, whole_sha, len(manifest),
                                 new_chunks, duplicate_chunks, bytes_written, tuple(outcomes))

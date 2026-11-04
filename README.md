@@ -9,8 +9,8 @@ the content-addressed chunk store, verified restore, reference-counted delete, t
 integrity audit, explicit reconciliation and storage statistics work through the API.
 The React app (Phase 3) exposes all of it: upload, chunk-level inspection and comparison, restore,
 delete, a read-only database explorer, architecture diagrams, the integrity audit and the rendered
-project documentation. Phase 4 adds step-by-step upload and restore lifecycles, a chunking explorer (CDC vs fixed-size computed by the real chunker), a consistency-protocol visualisation, an API explorer driven by the OpenAPI document and an ADR explorer, with a responsive layout. Benchmarking and capacity simulation are still not implemented and their
-pages say so. It is a sequential, single-process prototype (**run uvicorn with
+project documentation. Phase 4 adds step-by-step upload and restore lifecycles, a chunking explorer (CDC vs fixed-size computed by the real chunker), a consistency-protocol visualisation, an API explorer driven by the OpenAPI document and an ADR explorer, with a responsive layout. Phase 5 adds an isolated fault-injection lab (off by default: `CHUNKVAULT_ENABLE_FAULT_LAB=1`), a reproducible benchmark engine
+that runs in a worker process, a CDC vs fixed-size comparison measured on this machine, and a mathematical capacity model. It is a sequential, single-process prototype (**run uvicorn with
 one worker**); there is no distributed functionality.
 
 ## Run

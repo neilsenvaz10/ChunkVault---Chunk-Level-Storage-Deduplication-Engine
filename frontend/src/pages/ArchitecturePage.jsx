@@ -4,6 +4,7 @@ import { Card } from '../components/ui'
 import ApiExplorer from './architecture/ApiExplorer'
 import CdcExplorer from './architecture/CdcExplorer'
 import ConsistencyView from './architecture/ConsistencyView'
+import FaultLab from './architecture/FaultLab'
 import { ComponentDetails, ComponentDiagram, DataFlowDiagram, DiagramViewport, LayerLegend, SequenceDiagram } from './architecture/diagrams'
 import { COMPONENTS, CONCEPTS, FOCUS_ALIASES, RESTORE_SEQUENCE, UPLOAD_SEQUENCE } from './architecture/data'
 import { RESTORE_STAGES, UPLOAD_STAGES } from './architecture/lifecycles'
@@ -15,6 +16,7 @@ const TABS = [
   ['restorelife', 'Restore lifecycle'],
   ['cdc', 'Chunking (CDC)'],
   ['consistency', 'Consistency protocol'],
+  ['faults', 'Fault injection & recovery'],
   ['api', 'API explorer'],
   ['upload', 'Upload sequence'],
   ['restore', 'Restore sequence'],
@@ -56,6 +58,7 @@ export default function ArchitecturePage() {
       {tab === 'restorelife' && <Walkthrough key="re" kind="restore" stages={RESTORE_STAGES} />}
       {tab === 'cdc' && <CdcExplorer />}
       {tab === 'consistency' && <ConsistencyView />}
+      {tab === 'faults' && <FaultLab />}
       {tab === 'api' && <ApiExplorer />}
       {tab === 'upload' && (
         <Card title="Upload sequence">

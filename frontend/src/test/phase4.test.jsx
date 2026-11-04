@@ -368,7 +368,7 @@ describe('architecture decision records', () => {
     await user.click(await screen.findByRole('tab', { name: 'Decision records (ADRs)' }))
     const nav = await screen.findByRole('navigation', { name: 'Architecture decision records' })
     const buttons = within(nav).getAllByRole('button')
-    expect(buttons).toHaveLength(7)
+    expect(buttons).toHaveLength(8)
     expect(buttons[0]).toHaveTextContent('ADR-0001')
     expect(buttons[1]).toHaveTextContent('ADR-0002')
     expect(buttons[0]).toHaveAttribute('aria-current', 'page')

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
+from app.benchmarking.jobs import BenchmarkJobs
 from app.api.limits import BodyLimitMiddleware
 from app.api.router import api_router
 from app.core.config import Settings
@@ -26,7 +27,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.ensure_directories()
         initialize_database(settings.db_path)
         app.state.services = build_services(settings)
+        app.state.benchmarks = BenchmarkJobs(settings.benchmarks_dir, settings.cdc)
         yield
+        app.state.benchmarks.shutdown()  # never leave a benchmark worker running
         # Shutdown: connections are per-request and already closed; nothing to release.
 
     app = FastAPI(

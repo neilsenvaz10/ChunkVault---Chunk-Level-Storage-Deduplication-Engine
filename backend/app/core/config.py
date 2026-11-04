@@ -77,6 +77,9 @@ class Settings:
     writer_lock_timeout_seconds: float = 30.0
     # Staging files / running operations younger than this are assumed in flight.
     staging_stale_seconds: float = 300.0
+    # The fault lab damages ONLY temporary stores it creates itself, but it is still off unless
+    # explicitly enabled (CHUNKVAULT_ENABLE_FAULT_LAB=1).
+    fault_lab_enabled: bool = False
     app_name: str = APP_NAME
     app_version: str = APP_VERSION
 
@@ -161,4 +164,5 @@ class Settings:
             max_upload_bytes=get_int("MAX_UPLOAD_BYTES", 64 * 1024 * KIB),
             writer_lock_timeout_seconds=get_float("WRITER_LOCK_TIMEOUT_SECONDS", 30.0),
             staging_stale_seconds=get_float("STAGING_STALE_SECONDS", 300.0),
+            fault_lab_enabled=(get("ENABLE_FAULT_LAB") or "").strip().lower() in ("1", "true", "yes"),
         )

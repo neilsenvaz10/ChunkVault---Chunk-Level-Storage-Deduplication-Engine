@@ -13,6 +13,7 @@
 | SQL | Parameterised queries only. No endpoint accepts SQL, filters or expressions. |
 | Content | Files are stored and returned as opaque bytes (`application/octet-stream`, attachment). No scanning or encryption at rest. |
 | Educational views | Walkthroughs make no mutating calls. `GET /api/system/chunking-demo` is read-only, validated and bounded (generated input of at most 512 KiB; nothing stored). The destructive operations (delete, reconcile) keep their confirmations. |
+| Experiments | The fault lab is **off by default** (`CHUNKVAULT_ENABLE_FAULT_LAB=1` enables it), accepts only built-in scenario ids, runs against private temporary stores one at a time and cleans up after itself. Benchmarks run in a worker process with bounded size, iterations, budget and a hard time limit; one at a time; cancellable. Neither can touch the application's database or chunk store. |
 | Denial of service | Upload size and request body are bounded; there is no rate limiting. A single-writer lock means one slow upload delays other writers (`409 writer_busy` after a timeout). |
 
 ## Scalability limitations (stated, not solved)

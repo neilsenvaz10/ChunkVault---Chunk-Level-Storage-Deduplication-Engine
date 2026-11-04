@@ -23,12 +23,12 @@ export const MODULES = [
     description: 'Read-only integrity audit and explicit reconciliation of crash leftovers.',
   },
   {
-    path: '/performance', label: 'Performance Engineering', implemented: false, phase: 6,
-    description: 'Planned benchmarking methodology. No measurements exist yet.',
+    path: '/performance', label: 'Performance Engineering', implemented: true,
+    description: 'Reproducible benchmarks of the real pipeline and a CDC vs fixed-size comparison, with every number measured on this machine.',
   },
   {
-    path: '/simulation', label: 'Capacity Simulation', implemented: false, phase: 7,
-    description: 'Planned hypothetical workload model. Not implemented, and never measured prototype data.',
+    path: '/simulation', label: 'Capacity Simulation', implemented: true,
+    description: 'A mathematical capacity and scalability model driven by your assumptions. It is not a measurement or a load test.',
   },
   {
     path: '/tradeoffs', label: 'Architecture Trade-offs', implemented: true,

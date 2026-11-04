@@ -30,6 +30,25 @@ export const FINDING_INFO = {
     meaning: 'An operation still "running" long after it started, i.e. interrupted by a crash.' },
 }
 
+// Recovery dashboard: detection results (from the read-only audit) and, separately, what a repair did.
+export function RecoveryDashboard({ report, actions }) {
+  const k = report?.counts_by_kind || {}
+  const n = (...names) => names.reduce((t, x) => t + (k[x] || 0), 0)
+  const v = (x) => (report ? formatInt(x) : '—')
+  return (
+    <div className="tiles" role="group" aria-label="Recovery dashboard">
+      <MetricTile label="Files checked" value={v(report?.files_checked)} />
+      <MetricTile label="Chunks checked" value={v(report?.chunks_checked)} />
+      <MetricTile label="Missing chunks" value={v(n('missing_chunk_file'))} tone={n('missing_chunk_file') ? 'bad' : undefined} />
+      <MetricTile label="Hash mismatches" value={v(n('corrupt_chunk', 'file_hash_mismatch'))} tone={n('corrupt_chunk', 'file_hash_mismatch') ? 'bad' : undefined} />
+      <MetricTile label="Reference-count mismatches" value={v(n('ref_count_mismatch'))} tone={n('ref_count_mismatch') ? 'bad' : undefined} />
+      <MetricTile label="Orphaned chunks" value={v(n('orphan_chunk_file', 'unreferenced_chunk'))} />
+      <MetricTile label="Recovery actions" value={actions === null || actions === undefined ? 'none run' : formatInt(actions)} hint="from the last explicit reconciliation" />
+      <MetricTile label="Verification status" value={!report ? 'not audited' : report.healthy ? 'healthy' : 'findings'} tone={!report ? undefined : report.healthy ? 'good' : 'bad'} hint="detection only; nothing was changed" />
+    </div>
+  )
+}
+
 function Findings({ report }) {
   const groups = Object.entries(report.counts_by_kind)
   return (
@@ -101,6 +120,11 @@ export default function ReliabilityPage() {
 
   return (
     <>
+      <Card title="Recovery dashboard" aside={<StatusBadge tone="ok">detection and repair are separate</StatusBadge>}>
+        <RecoveryDashboard report={audit.report} actions={rec.result ? rec.result.actions.length : null} />
+        {!audit.report && <p className="empty">Run the read-only audit below to fill this in; nothing is shown until it has actually been run.</p>}
+      </Card>
+
       <Card title="Read-only integrity audit" aside={<StatusBadge tone="ok">changes nothing</StatusBadge>}>
         <p>
           The audit re-hashes every stored chunk, checks every manifest and reference count, and looks for crash leftovers.
@@ -150,9 +174,10 @@ export default function ReliabilityPage() {
       </Card>
 
       <Card title="Fault injection">
-        <p className="empty">
-          Controlled fault-injection experiments are planned for a later phase and are not available here. To see the audit
-          report real problems today, damage an isolated test store yourself, as the backend test suite does.
+        <p>
+          Controlled experiments that break an <strong>isolated temporary store</strong> (never your data) and verify recovery live in the{' '}
+          <Link to="/architecture">System Architecture</Link> page under <em>Fault injection &amp; recovery</em>. There are no fault controls here: this page only
+          audits and repairs your real store, and only when you ask.
         </p>
         <p className="muted"><Link to="/docs">Read the consistency protocol →</Link></p>
       </Card>

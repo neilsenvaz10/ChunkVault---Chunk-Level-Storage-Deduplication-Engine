@@ -169,27 +169,26 @@ describe('reliability & consistency', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The server reported an internal error.')
   })
 
-  it('does not offer fault injection', async () => {
+  it('offers no fault controls on the real-store page and points to the isolated lab', async () => {
     renderApp('/reliability')
-    expect(await screen.findByText(/Controlled fault-injection experiments are planned/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /inject|corrupt|delete chunk/i })).not.toBeInTheDocument()
+    expect(await screen.findByText(/isolated temporary store/)).toBeInTheDocument()
+    expect(within(document.querySelector('main')).getByRole('link', { name: 'System Architecture' })).toHaveAttribute('href', '/architecture')
+    expect(screen.queryByRole('button', { name: /inject|corrupt|delete chunk|run experiment/i })).not.toBeInTheDocument()
   })
 })
 
 describe('planned and educational pages', () => {
-  it('performance page claims no measurements', async () => {
+  it('performance page shows no measurements when none were saved', async () => {
     renderApp('/performance')
-    expect(await screen.findByText(/No benchmark has been run/)).toBeInTheDocument()
-    expect(screen.getAllByText(/Not implemented/).length).toBeGreaterThan(0)
-    expect(document.body.textContent).not.toMatch(/\d+(\.\d+)?\s*(MiB\/s|MB\/s|ms\b)/)
-    expect(await screen.findByText('/api/benchmarks')).toBeInTheDocument()
+    expect(await screen.findByText(/No benchmark has been run yet/)).toBeInTheDocument()
+    expect(screen.getAllByText(/No saved pipeline benchmark yet/).length).toBeGreaterThan(0)
+    expect(document.body.textContent).not.toMatch(/\d+(\.\d+)?\s*(MiB\/s|MB\/s)/)
   })
 
-  it('simulation page is labelled hypothetical and not implemented', async () => {
+  it('simulation page is labelled as a mathematical model, not a measurement', async () => {
     renderApp('/simulation')
-    expect((await screen.findAllByText(/hypothetical workload model/)).length).toBeGreaterThan(0)
-    expect(screen.getByText(/never be presented as/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /run|simulate/i })).not.toBeInTheDocument()
+    expect((await screen.findAllByText(/mathematical model/)).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Estimated results (model output)')).toBeInTheDocument()
   })
 
   it('trade-offs page covers each comparison and keeps distributed designs conceptual', async () => {

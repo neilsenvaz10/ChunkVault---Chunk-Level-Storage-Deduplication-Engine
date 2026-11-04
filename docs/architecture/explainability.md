@@ -15,8 +15,12 @@ for a measurement.
 | ADR explorer | The text is parsed from `docs/decisions/*.md` at build time | None (a missing section is shown as "Not recorded in this ADR") |
 | Content-addressed view | Manifest, hashes, sizes, reference counts and shared status from the API; paths are the documented layout derived from the digest, **relative to the store root** | — |
 | Reference-count walkthrough | The trigger and view definitions are read from `backend/app/database/schema.sql`; the invariant status above it is live | The step-by-step example (files A and B, chunks X and Y) is **illustrative** and labelled as such |
+| Fault injection lab | Everything shown is observed from a real experiment: the SQLite rows, chunk files and staging files of the private store, the real audit, the real recovery actions, and the outcome of restoring files. The `recovery_status` label is computed by the backend | The scenario descriptions and the *expected* column, which is declared in the scenario definition before the run; the step names in the timeline |
+| Performance page | Every number comes from a saved benchmark that actually ran (parameters, environment and methodology are stored with it); charts plot only those values | Nothing; with no saved benchmark the page shows empty states |
+| Capacity simulation | Nothing: it is a **mathematical model** evaluating the stated assumptions; labelled as such with its formulas | All outputs and charts are projections, never measurements |
 
 ## Safety properties
+- The fault lab and benchmarks run only on their own temporary stores, never the application's data (see ADR-0008); the lab is disabled unless explicitly enabled.
 - No walkthrough calls a mutating endpoint. Frontend tests assert that stepping through the lifecycle and reference-count walkthroughs makes no upload, download, delete or reconcile call.
 - `GET /api/system/chunking-demo` is read-only and bounded (input at most 512 KiB, insertion at most 4 KiB, validated parameters). It generates its input from a seed, never reads uploaded data, and writes nothing to the database or chunk store.
 - Database inspection remains read-only; no endpoint accepts SQL.
