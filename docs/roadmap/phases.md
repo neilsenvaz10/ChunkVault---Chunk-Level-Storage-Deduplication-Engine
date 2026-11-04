@@ -4,7 +4,8 @@
 |---|---|---|
 | 1 | Repo structure, HLD/LLD docs, SQLite schema + tests, FastAPI foundation, React shell, CDC parameters | done (committed) |
 | 2 | Backend storage engine: CDC, SHA-256, chunk store, repository, dedup, upload, restore, delete, audit/reconcile, stats, API | implemented, awaiting approval |
-| 3 | Frontend: upload/file UI, database explorer, architecture views | not started |
+| 2.5 | Hardening review (bounded request bodies, reconciliation safety) | done (see [hardening-review.md](../architecture/hardening-review.md)) |
+| 3 | Frontend: upload/file UI, chunk explorer and comparison, database explorer, architecture views, audit UI, documentation viewer | implemented, awaiting approval |
 | 4 | (merged into Phase 2: restoration and deletion) | n/a |
 | 5 | Interactive fault-injection demonstrations and reliability UI | not started |
 | 6 | Benchmark runner (fixed-size vs CDC, measured on this machine) | not started |

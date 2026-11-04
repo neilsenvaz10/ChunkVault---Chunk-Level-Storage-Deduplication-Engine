@@ -52,6 +52,17 @@ class ChunkDecision(StrEnum):
 
 
 @dataclass(frozen=True)
+class ChunkOutcome:
+    """What the upload did with one manifest position. Recorded only in the upload
+    response (not persisted), because it is a fact about that one upload."""
+
+    chunk_index: int
+    chunk_hash: str
+    chunk_size: int
+    decision: str  # new | reused | adopted | repeated_in_file
+
+
+@dataclass(frozen=True)
 class UploadResult:
     file_id: str
     filename: str
@@ -61,6 +72,7 @@ class UploadResult:
     new_chunks: int
     duplicate_chunks: int
     bytes_written: int
+    chunk_outcomes: tuple[ChunkOutcome, ...] = ()
 
 
 class DeduplicationManager(Protocol):

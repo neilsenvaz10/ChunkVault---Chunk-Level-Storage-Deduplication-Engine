@@ -19,6 +19,7 @@ from app.schemas.files import (
     FileDetailResponse,
     FileListResponse,
     FileSummary,
+    UploadChunkOutcome,
     UploadResponse,
 )
 
@@ -29,9 +30,9 @@ _ERR = {404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}}
 _MULTIPART_SLACK = 1024 * 1024
 
 
-def _summary(f) -> FileSummary:
+def _summary(f, chunk_count: int) -> FileSummary:
     return FileSummary(file_id=f.file_id, filename=f.filename, original_size=f.original_size,
-                       sha256=f.sha256, status=f.status.value, created_at=f.created_at)
+                       sha256=f.sha256, status=f.status.value, created_at=f.created_at, chunk_count=chunk_count)
 
 
 @router.post("", response_model=UploadResponse, status_code=201,
@@ -43,13 +44,20 @@ def upload_file(request: Request, file: UploadFile = File(...), svc: Services = 
     if declared and declared.isdigit() and int(declared) > limit + _MULTIPART_SLACK:
         raise UploadTooLargeError(f"upload exceeds the {limit}-byte limit")
     result = svc.uploader.upload(file.filename or "", file.file)
-    return UploadResponse(**result.__dict__)
+    return UploadResponse(**{**result.__dict__, "chunk_outcomes": [UploadChunkOutcome(**vars(o)) for o in result.chunk_outcomes]})
 
 
 @router.get("", response_model=FileListResponse, summary="List files (newest first)")
 def list_files(limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0),
                svc: Services = Depends(get_services), conn: sqlite3.Connection = Depends(get_db)):
-    return FileListResponse(items=[_summary(f) for f in svc.repo.list_files(conn, limit, offset)],
+    files = svc.repo.list_files(conn, limit, offset)
+    counts = {}
+    if files:
+        marks = ",".join("?" * len(files))
+        counts = dict(conn.execute(
+            f"SELECT file_id, COUNT(*) FROM file_chunks WHERE file_id IN ({marks}) GROUP BY file_id",
+            [f.file_id for f in files]).fetchall())
+    return FileListResponse(items=[_summary(f, counts.get(f.file_id, 0)) for f in files],
                             total=svc.repo.count_files(conn), limit=limit, offset=offset)
 
 
@@ -66,7 +74,7 @@ def get_file(file_id: FileId, svc: Services = Depends(get_services),
         if m.chunk_hash not in refs:
             refs[m.chunk_hash] = svc.repo.get_chunk(conn, m.chunk_hash).ref_count
     return FileDetailResponse(
-        **_summary(f).model_dump(), chunk_count=len(manifest), unique_chunk_count=len(refs),
+        **_summary(f, len(manifest)).model_dump(), unique_chunk_count=len(refs),
         chunks=[FileChunkInfo(chunk_index=m.chunk_index, chunk_hash=m.chunk_hash, chunk_size=m.chunk_size,
                               ref_count=refs[m.chunk_hash]) for m in manifest])
 

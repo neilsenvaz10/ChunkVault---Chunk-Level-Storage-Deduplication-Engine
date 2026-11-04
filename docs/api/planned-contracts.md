@@ -6,10 +6,10 @@ Interactive docs for what is actually served: `/docs` and `/openapi.json` (FastA
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/health` | `200 HealthResponse` (`503` with the same body, `status: "degraded"`, if the database check fails) |
+| GET | `/api/health` | `200 HealthResponse` incl. `max_upload_bytes` so clients can validate before sending (`503` with the same body, `status: "degraded"`, if the database check fails) |
 | GET | `/api/planned-endpoints` | `200 PlannedEndpointsResponse` — the still-unimplemented endpoints, each `status: "planned"` |
-| POST | `/api/files` | multipart field `file` → `201 UploadResponse`; `413 upload_too_large`; `422` bad/missing file or filename; `409 writer_busy` / `chunk_unavailable` / `chunk_identity_conflict`; `500 upload_failed` / `chunk_corrupt` |
-| GET | `/api/files?limit&offset` | `200 FileListResponse` (newest first, all statuses) |
+| POST | `/api/files` | multipart field `file` → `201 UploadResponse` (counts plus `chunk_outcomes`: one `{chunk_index, chunk_hash, chunk_size, decision}` per position with decision `new` / `reused` / `adopted` / `repeated_in_file`; this is a fact about that upload only and is **not persisted**); `413 upload_too_large`; `422` bad/missing file or filename; `409 writer_busy` / `chunk_unavailable` / `chunk_identity_conflict`; `500 upload_failed` / `chunk_corrupt` |
+| GET | `/api/files?limit&offset` | `200 FileListResponse` (newest first, all statuses; each item includes `chunk_count`) |
 | GET | `/api/files/{file_id}` | `200 FileDetailResponse` (ordered manifest + ref counts); `404 file_not_found`; `422` malformed id |
 | GET | `/api/files/{file_id}/download` | verified bytes, headers `Content-Disposition`, `X-ChunkVault-SHA256`; `404 file_not_restorable`; `500 chunk_missing` / `chunk_corrupt` / `file_hash_mismatch` / `manifest_inconsistent` |
 | DELETE | `/api/files/{file_id}` | `200 DeleteFileResponse`; repeated delete → `404 file_not_found` |
@@ -18,7 +18,11 @@ Interactive docs for what is actually served: `/docs` and `/openapi.json` (FastA
 | POST | `/api/integrity/audit` | optional body `{file_id?, verify_chunk_bytes?}` → `200 IntegrityCheckResponse`; read-only; `404` unknown file |
 | POST | `/api/integrity/reconcile` | explicit cleanup → `200 ReconcileResponse` (every action listed, plus a post-repair audit); `409 writer_busy` |
 
-Run uvicorn with a single worker; mutating endpoints are serialised by a writer lock.
+| GET | `/api/chunks/{hash}` | `200 ChunkDetailResponse`: the chunk plus every manifest row referencing it; `404`; `422` malformed hash |
+| GET | `/api/inspect/schema` | `200 SchemaResponse`: whitelisted tables, columns, primary/foreign keys, row counts, ref-count invariant status |
+| GET | `/api/inspect/tables/{table}/rows?limit&offset` | `200 TableRowsResponse` for `files`, `chunks`, `file_chunks` or `operations` only (read-only, paginated, max 200 rows) |
+
+Run uvicorn with a single worker; mutating endpoints are serialised by a writer lock. Request bodies are bounded before parsing: `POST /api/files` allows `max_upload_bytes` + 1 MiB overhead, everything else 1 MiB; violations return `413 upload_too_large` (or `400 invalid_content_length`).
 
 ## Error envelope (all non-2xx)
 

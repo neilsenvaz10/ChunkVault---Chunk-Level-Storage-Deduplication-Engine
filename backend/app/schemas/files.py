@@ -9,6 +9,16 @@ from pydantic import BaseModel, Field
 Sha256Hex = Field(pattern=r"^[0-9a-f]{64}$", description="Lowercase hex SHA-256.")
 
 
+class UploadChunkOutcome(BaseModel):
+    chunk_index: int = Field(ge=0)
+    chunk_hash: str = Sha256Hex
+    chunk_size: int = Field(gt=0)
+    decision: Literal["new", "reused", "adopted", "repeated_in_file"] = Field(
+        description="new: bytes written by this upload; reused: an already-stored chunk; "
+                    "adopted: valid orphan bytes from an interrupted upload; "
+                    "repeated_in_file: an earlier position of this same upload used it.")
+
+
 class UploadResponse(BaseModel):
     """POST /api/files -> 201."""
 
@@ -20,6 +30,7 @@ class UploadResponse(BaseModel):
     new_chunks: int = Field(ge=0, description="Chunks whose bytes were written by this upload.")
     duplicate_chunks: int = Field(ge=0, description="Chunk occurrences that reused existing bytes (incl. repeats within the file).")
     bytes_written: int = Field(ge=0, description="Bytes actually added to the chunk store.")
+    chunk_outcomes: list[UploadChunkOutcome] = Field(description="Per-position decisions taken by THIS upload (not persisted).")
 
 
 class DeleteFileResponse(BaseModel):
@@ -39,6 +50,7 @@ class FileSummary(BaseModel):
     sha256: str | None
     status: Literal["uploading", "complete", "failed", "deleting"]
     created_at: str
+    chunk_count: int = Field(ge=0, description="Manifest rows (chunk occurrences) of this file.")
 
 
 class FileListResponse(BaseModel):
@@ -60,7 +72,6 @@ class FileChunkInfo(BaseModel):
 class FileDetailResponse(FileSummary):
     """GET /api/files/{file_id} -> 200."""
 
-    chunk_count: int = Field(ge=0)
     unique_chunk_count: int = Field(ge=0)
     chunks: list[FileChunkInfo]
 

@@ -1,41 +1,75 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import StatusBadge from '../components/StatusBadge'
+import { useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { PageHeader, StatusBadge } from '../components/ui'
 import { useHealth } from '../hooks/useApi'
-import { MODULES } from '../utils/navigation'
+import { MODULES, moduleFor } from '../utils/navigation'
 
-function HealthPill() {
+function readCollapsed() {
+  try {
+    return window.localStorage.getItem('chunkvault.sidebar') === 'collapsed'
+  } catch {
+    return false
+  }
+}
+
+export function HealthIndicator() {
   const { data, error, loading } = useHealth()
-  if (loading) return <StatusBadge>Checking backend…</StatusBadge>
+  if (loading && !data) return <StatusBadge>Checking backend…</StatusBadge>
   if (error) return <StatusBadge tone="error">Backend unreachable</StatusBadge>
-  return data.status === 'ok' ? (
-    <StatusBadge tone="ok">Backend healthy</StatusBadge>
-  ) : (
-    <StatusBadge tone="warn">Backend degraded</StatusBadge>
-  )
+  return data.status === 'ok'
+    ? <StatusBadge tone="ok">Backend healthy</StatusBadge>
+    : <StatusBadge tone="warn">Backend degraded</StatusBadge>
 }
 
 export default function AppLayout() {
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const { pathname } = useLocation()
+  const mod = moduleFor(pathname)
+
+  const toggle = () => {
+    setCollapsed((c) => {
+      try {
+        window.localStorage.setItem('chunkvault.sidebar', c ? 'open' : 'collapsed')
+      } catch {
+        // preference is optional
+      }
+      return !c
+    })
+  }
+
   return (
-    <div className="shell">
+    <div className={`shell ${collapsed ? 'is-collapsed' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
-          ChunkVault <small>Phase 1 UI shell · backend engine in Phase 2</small>
+          <span className="brand-name">ChunkVault</span>
+          <small>Chunk-level deduplication</small>
         </div>
-        <nav>
+        <nav aria-label="Primary">
           {MODULES.map((m) => (
-            <NavLink key={m.path} to={m.path} end={m.path === '/'}>
-              <span>{m.label}</span>
+            <NavLink key={m.path} to={m.path} end={m.path === '/'} title={m.label}>
+              <span className="nav-label">{m.label}</span>
               {!m.implemented && <i title={`Planned for phase ${m.phase}`}>P{m.phase}</i>}
             </NavLink>
           ))}
         </nav>
+        <button className="collapse-btn" onClick={toggle} aria-expanded={!collapsed}
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+          {collapsed ? '»' : '« Collapse'}
+        </button>
       </aside>
       <div className="main">
         <header className="topbar">
-          <span>Chunk-level storage deduplication engine</span>
-          <HealthPill />
+          <span className="muted">Single-machine prototype · sequential writes</span>
+          <HealthIndicator />
         </header>
         <main className="content">
+          {mod && (
+            <PageHeader
+              title={mod.label}
+              description={mod.description}
+              status={!mod.implemented && <StatusBadge tone="warn">Not implemented · Phase {mod.phase}</StatusBadge>}
+            />
+          )}
           <Outlet />
         </main>
       </div>

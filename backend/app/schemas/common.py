@@ -30,3 +30,4 @@ class HealthResponse(BaseModel):
     service: str
     version: str
     database: DatabaseHealth
+    max_upload_bytes: int = Field(description="Configured upload size limit, so clients can validate before sending.")

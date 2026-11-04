@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
+from app.api.limits import BodyLimitMiddleware
 from app.api.router import api_router
 from app.core.config import Settings
 from app.core.services import build_services
@@ -40,6 +41,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     )
     app.state.settings = settings
+    # Added first = innermost of the two, so CORS headers also appear on 413/400 rejections.
+    app.add_middleware(BodyLimitMiddleware, max_upload_bytes=settings.max_upload_bytes)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),

@@ -20,6 +20,8 @@ from app.database.repository import (
 )
 from app.database.states import ChunkState, FileStatus, OperationStatus, OperationType
 
+# Never trust the counter alone: a chunk is only reclaimable if NO manifest row uses it.
+_NO_MANIFEST_ROWS = "NOT EXISTS (SELECT 1 FROM file_chunks fc WHERE fc.chunk_hash = chunks.hash)"
 _NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 
 
@@ -82,7 +84,8 @@ class SqliteMetadataRepository:
             return []
         marks = ",".join("?" * len(hashes))
         return [r[0] for r in conn.execute(
-            f"SELECT hash FROM chunks WHERE ref_count=0 AND hash IN ({marks}) ORDER BY hash", hashes)]
+            f"SELECT hash FROM chunks WHERE ref_count=0 AND hash IN ({marks}) AND {_NO_MANIFEST_ROWS} ORDER BY hash",
+            hashes)]
 
     # -- chunks --------------------------------------------------------------
 
@@ -117,12 +120,13 @@ class SqliteMetadataRepository:
         return conn.execute("SELECT COUNT(*) FROM chunks WHERE state=?", (state.value,)).fetchone()[0]
 
     def unreferenced_chunks(self, conn) -> list[ChunkRecord]:
-        return [_chunk(r) for r in conn.execute("SELECT * FROM chunks WHERE ref_count=0 ORDER BY hash")]
+        return [_chunk(r) for r in conn.execute(
+            f"SELECT * FROM chunks WHERE ref_count=0 AND {_NO_MANIFEST_ROWS} ORDER BY hash")]
 
     def delete_unreferenced_chunk_rows(self, conn, hashes) -> list[str]:
         deleted = []
-        for h in hashes:  # ref_count = 0 re-checked in SQL; the RESTRICT FK is a second guard
-            cur = conn.execute("DELETE FROM chunks WHERE hash=? AND ref_count=0", (h,))
+        for h in hashes:  # counter AND manifest re-checked in SQL; the RESTRICT FK is a third guard
+            cur = conn.execute(f"DELETE FROM chunks WHERE hash=? AND ref_count=0 AND {_NO_MANIFEST_ROWS}", (h,))
             if cur.rowcount:
                 deleted.append(h)
         return deleted

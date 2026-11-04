@@ -38,6 +38,7 @@ from app.database.repository import MetadataRepository
 from app.database.states import ChunkState, FileStatus, OperationStatus, OperationType
 from app.deduplication.interfaces import (
     ChunkDecision,
+    ChunkOutcome,
     ChunkIdentityConflictError,
     DeduplicationManager,
     EmptyFilenameError,
@@ -100,6 +101,7 @@ class Uploader:
                 op_id = self._repo.start_operation(conn, OperationType.UPLOAD, file_id)
 
             manifest: list[tuple[int, str, int]] = []
+            outcomes: list[ChunkOutcome] = []
             known: dict[str, int] = {}  # hash -> size, for chunks seen in this upload
             to_register: list[tuple[str, int]] = []
             new_chunks = duplicate_chunks = bytes_written = 0
@@ -110,9 +112,12 @@ class Uploader:
                         if known[h] != chunk.size:
                             raise ChunkIdentityConflictError("same digest with different sizes inside one file")
                         duplicate_chunks += 1
+                        label = "repeated_in_file"
                     else:
                         decision = self._dedup.decide(conn, h, chunk.size)
                         known[h] = chunk.size
+                        label = {ChunkDecision.NEW: "new", ChunkDecision.DUPLICATE: "reused",
+                                 ChunkDecision.ADOPT: "adopted"}[decision]
                         if decision is ChunkDecision.DUPLICATE:
                             duplicate_chunks += 1
                         else:
@@ -126,6 +131,7 @@ class Uploader:
                             else:  # ADOPT
                                 duplicate_chunks += 1
                     manifest.append((chunk.index, h, chunk.size))
+                    outcomes.append(ChunkOutcome(chunk.index, h, chunk.size, label))
 
             if sum(m[2] for m in manifest) != size:
                 raise UploadError("chunk sizes do not add up to the uploaded size")
@@ -142,7 +148,7 @@ class Uploader:
                 self._repo.finish_operation(conn, op_id, OperationStatus.SUCCEEDED)
             part.unlink(missing_ok=True)  # step 7: the file is durable in the store now
             return UploadResult(file_id, name, size, whole_sha, len(manifest),
-                                new_chunks, duplicate_chunks, bytes_written)
+                                new_chunks, duplicate_chunks, bytes_written, tuple(outcomes))
         except Exception as exc:
             self._cleanup_failure(conn, file_id, file_row_created, op_id, published, exc)
             if isinstance(exc, ChunkVaultError):

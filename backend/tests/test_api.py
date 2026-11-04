@@ -136,3 +136,7 @@ def test_planned_schemas_exist_and_validate():
         operations.SimulationRequest(logical_data_tb=1, assumed_dedup_ratio=0.5, avg_chunk_size_bytes=1)
     with pytest.raises(ValueError):
         files.FileChunkInfo(chunk_index=0, chunk_hash="zz", chunk_size=1, ref_count=0)
+
+
+def test_health_exposes_upload_limit(client, settings):
+    assert client.get("/api/health").json()["max_upload_bytes"] == settings.max_upload_bytes

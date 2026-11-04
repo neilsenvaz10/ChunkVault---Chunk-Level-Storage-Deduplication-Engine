@@ -42,7 +42,7 @@ produces the same chunks.
 - First test at chunk length `min`; cut when `fp mod D == D - 1`; forced cut at `max`; the last chunk may be shorter than `min`.
 - Streaming: input is read in `read_size` blocks (default 64 KiB); memory is bounded by `max + read_size`. Boundaries do not depend on the read size (tested with 1 byte to 1 MiB reads).
 - `tests/test_cdc.py` compares the rolling chunker against a naive implementation that recomputes the full window polynomial at every position (two configurations): identical boundaries.
-- The 16 KiB average is a **design parameter**, not a guarantee: observed means on random data differ from it (the Phase 2 report lists measured values). CDC is not claimed to beat fixed-size chunking for in-place edits, where both change about one chunk.
+- The 16 KiB average is a **design parameter**, not a guarantee. Theory (min + truncated geometric) gives a mean of about 16 384 B with a standard deviation of about 12 KiB, so small samples vary widely; measured over 2 029 chunks of random data the mean was 16 472 B. Highly repetitive data behaves differently (forced 128 KiB cuts). See [hardening-review.md](hardening-review.md). CDC is not claimed to beat fixed-size chunking for in-place edits, where both change about one chunk.
 
 ## Rolling fingerprint ≠ SHA-256
 

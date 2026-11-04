@@ -7,8 +7,10 @@ unique chunk once in a content-addressed local store, and keeps file→chunk map
 **Status: Phase 2 — backend storage engine.** Upload, Rabin CDC, SHA-256 deduplication,
 the content-addressed chunk store, verified restore, reference-counted delete, the read-only
 integrity audit, explicit reconciliation and storage statistics work through the API.
-Benchmarking and capacity simulation are still interface-only, and the React app is still the
-Phase 1 shell (no upload UI). It is a sequential, single-process prototype (**run uvicorn with
+The React app (Phase 3) exposes all of it: upload, chunk-level inspection and comparison, restore,
+delete, a read-only database explorer, architecture diagrams, the integrity audit and the rendered
+project documentation. Benchmarking and capacity simulation are still not implemented and their
+pages say so. It is a sequential, single-process prototype (**run uvicorn with
 one worker**); there is no distributed functionality.
 
 ## Run
@@ -37,6 +39,7 @@ npm run dev        # http://localhost:5173, proxies /api to port 8000
 
 ```bash
 cd backend && .venv/Scripts/python -m pytest    # backend tests (temporary databases)
+cd frontend && npm test                          # component and unit tests (vitest, mocked API)
 cd frontend && npm run build                     # production build check
 ```
 

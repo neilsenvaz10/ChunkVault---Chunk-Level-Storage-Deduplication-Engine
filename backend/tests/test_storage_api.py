@@ -188,3 +188,28 @@ def test_openapi_lists_storage_endpoints_and_registry_only_has_the_unbuilt(clien
         assert p in paths
     planned = {e["path"] for e in client.get("/api/planned-endpoints").json()["endpoints"]}
     assert planned == {"/api/benchmarks", "/api/simulations"}
+
+
+def test_upload_response_reports_per_chunk_decisions(client):
+    data = make_data(30, 200 * KIB)
+    first = upload(client, data).json()
+    assert [o["chunk_index"] for o in first["chunk_outcomes"]] == list(range(first["chunk_count"]))
+    assert {o["decision"] for o in first["chunk_outcomes"]} == {"new"}
+    assert sum(o["chunk_size"] for o in first["chunk_outcomes"]) == len(data)
+    second = upload(client, data).json()
+    assert {o["decision"] for o in second["chunk_outcomes"]} == {"reused"}
+    mod = upload(client, data[:300] + b"inserted" + data[300:]).json()
+    decisions = [o["decision"] for o in mod["chunk_outcomes"]]
+    assert decisions.count("new") == mod["new_chunks"] and decisions.count("reused") == mod["duplicate_chunks"]
+    zeros = upload(client, bytes(300 * KIB)).json()
+    assert [o["decision"] for o in zeros["chunk_outcomes"]] == ["new", "repeated_in_file", "reused"][:0] or \
+        zeros["chunk_outcomes"][1]["decision"] == "repeated_in_file"
+
+
+def test_file_summaries_carry_chunk_counts(client):
+    a = upload(client, make_data(31, 120 * KIB)).json()
+    e = upload(client, b"", "empty").json()
+    items = {i["file_id"]: i for i in client.get("/api/files").json()["items"]}
+    assert items[a["file_id"]]["chunk_count"] == a["chunk_count"] > 0
+    assert items[e["file_id"]]["chunk_count"] == 0
+    assert client.get(f"/api/files/{a['file_id']}").json()["chunk_count"] == a["chunk_count"]

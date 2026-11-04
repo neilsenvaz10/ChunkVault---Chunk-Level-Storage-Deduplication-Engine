@@ -40,4 +40,5 @@ def health(
         service=settings.app_name,
         version=settings.app_version,
         database=db,
+        max_upload_bytes=settings.max_upload_bytes,
     )

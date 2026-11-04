@@ -49,7 +49,7 @@ flowchart LR
 ```
 
 Phase 2 implements every box except the benchmark runner and capacity simulation engine
-(interfaces only, Phases 6-7). The React client is still the Phase 1 shell; there is no upload UI yet.
+(interfaces only, Phases 6-7). The React client (Phase 3) is an interactive view of the real API: dashboard, file storage with a chunk explorer and file comparison, architecture diagrams, a read-only database explorer, the integrity audit and the documentation viewer.
 
 ## Components, responsibilities and dependencies
 
