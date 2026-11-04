@@ -4,11 +4,12 @@ A System Design micro-project: a single-machine prototype that splits files into
 content-defined chunks (Rabin-style CDC), identifies them by SHA-256, stores each
 unique chunk once in a content-addressed local store, and keeps file→chunk mappings in SQLite.
 
-**Status: Phase 1 — architecture foundation only.** The chunker, hashing, deduplication,
-chunk store, restoration, auditing, benchmarking and simulation are *designed and
-specified* (interfaces + docs) but **not implemented**. Only the health endpoint, the
-SQLite schema and the UI shell work. It is a sequential, single-process prototype; there
-is no distributed functionality.
+**Status: Phase 2 — backend storage engine.** Upload, Rabin CDC, SHA-256 deduplication,
+the content-addressed chunk store, verified restore, reference-counted delete, the read-only
+integrity audit, explicit reconciliation and storage statistics work through the API.
+Benchmarking and capacity simulation are still interface-only, and the React app is still the
+Phase 1 shell (no upload UI). It is a sequential, single-process prototype (**run uvicorn with
+one worker**); there is no distributed functionality.
 
 ## Run
 
@@ -21,6 +22,9 @@ python -m venv .venv
 ```
 
 API docs: http://127.0.0.1:8000/docs · health: http://127.0.0.1:8000/api/health
+
+Example: `curl -F file=@some.bin http://127.0.0.1:8000/api/files`, then `GET /api/storage/stats`.
+End-to-end check on a throw-away store: `.venv/Scripts/python ../scripts/verify_phase2.py`.
 
 Frontend (from `frontend/`; Node 18+):
 

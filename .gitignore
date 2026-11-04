@@ -24,3 +24,4 @@ data/benchmarks/*
 
 # Scratch
 scratch_*.log
+data/*.lock

@@ -1,4 +1,4 @@
-"""SQLite metadata repository: interface only (implemented in Phase 3).
+"""SQLite metadata repository: interface (implemented in database/sqlite_repository.py).
 
 Every method takes a ``sqlite3.Connection``. The repository never opens or
 commits transactions: the caller (upload orchestrator, restoration engine,
@@ -84,12 +84,16 @@ class MetadataRepository(Protocol):
 
     def get_file(self, conn: sqlite3.Connection, file_id: str) -> FileRecord | None: ...
 
-    def list_files(self, conn: sqlite3.Connection, limit: int, offset: int) -> list[FileRecord]: ...
+    def list_files(self, conn: sqlite3.Connection, limit: int, offset: int) -> list[FileRecord]:
+        """Newest first."""
+        ...
 
     def get_chunk(self, conn: sqlite3.Connection, chunk_hash: str) -> ChunkRecord | None: ...
 
-    def register_chunk(self, conn: sqlite3.Connection, chunk_hash: str, size_bytes: int) -> tuple[ChunkRecord, bool]:
-        """Insert as 'pending' if absent. Returns (record, created).
+    def register_chunk(
+        self, conn: sqlite3.Connection, chunk_hash: str, size_bytes: int, state: ChunkState = ChunkState.PENDING
+    ) -> tuple[ChunkRecord, bool]:
+        """Insert with ``state`` (default 'pending') if absent. Returns (record, created).
         Raises ``ChunkSizeConflict`` if the hash exists with a different size."""
         ...
 
@@ -122,8 +126,30 @@ class MetadataRepository(Protocol):
         self, conn: sqlite3.Connection, operation_id: int, status: OperationStatus, error_message: str | None = None
     ) -> None: ...
 
-    def find_stuck_operations(self, conn: sqlite3.Connection) -> list[OperationRecord]:
-        """Operations still 'running' at startup/reconciliation time."""
+    def count_files(self, conn: sqlite3.Connection) -> int: ...
+
+    def list_chunks(
+        self, conn: sqlite3.Connection, limit: int, offset: int, state: ChunkState | None = None
+    ) -> list[ChunkRecord]: ...
+
+    def count_chunks(self, conn: sqlite3.Connection, state: ChunkState | None = None) -> int: ...
+
+    def unreferenced_chunks(self, conn: sqlite3.Connection) -> list[ChunkRecord]:
+        """Chunk rows with ref_count == 0 (garbage-collection candidates)."""
+        ...
+
+    def delete_unreferenced_chunk_rows(self, conn: sqlite3.Connection, hashes: list[str]) -> list[str]:
+        """Delete rows from ``hashes`` whose ref_count is 0; returns those actually deleted."""
+        ...
+
+    def list_stuck_files(self, conn: sqlite3.Connection) -> list[FileRecord]:
+        """Files still in status 'uploading'."""
+        ...
+
+    def list_running_operations(self, conn: sqlite3.Connection) -> list[OperationRecord]: ...
+
+    def chunks_referenced_by_file(self, conn: sqlite3.Connection, chunk_hash: str) -> list[str]:
+        """Ids of files whose manifest contains the chunk."""
         ...
 
     def ref_count_mismatches(self, conn: sqlite3.Connection) -> list[tuple[str, int, int]]:

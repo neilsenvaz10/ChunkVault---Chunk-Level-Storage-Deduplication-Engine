@@ -48,9 +48,8 @@ flowchart LR
     BENCH --> ORCH
 ```
 
-Phase 1 implements only the React shell, the FastAPI request layer (health + planned-endpoint
-listing) and the SQLite repository's schema/connection management. Every other box is an
-interface (`backend/app/<component>/interfaces.py`) with documented behaviour.
+Phase 2 implements every box except the benchmark runner and capacity simulation engine
+(interfaces only, Phases 6-7). The React client is still the Phase 1 shell; there is no upload UI yet.
 
 ## Components, responsibilities and dependencies
 
@@ -60,12 +59,12 @@ interface (`backend/app/<component>/interfaces.py`) with documented behaviour.
 | FastAPI request layer | Routing, validation, error envelope, CORS, OpenAPI, per-request DB connection. No business logic. | orchestrator, restoration, auditor, benchmark, simulation |
 | Upload orchestrator | Runs the upload pipeline and owns its transaction/failure handling. | CDC, hashing, dedup manager, repository, chunk store |
 | CDC engine | Decides chunk boundaries with a rolling fingerprint. Pure; no I/O beyond reading the stream. | `CDCConfig` only |
-| SHA-256 hashing module | Chunk identity and integrity digest; streaming whole-file digest. Pure. | stdlib `hashlib` (Phase 2) |
-| Deduplication manager | Classifies each chunk NEW / DUPLICATE / REPAIR from *metadata*. | repository |
+| SHA-256 hashing module | Chunk identity and integrity digest; streaming whole-file digest. Pure. | stdlib `hashlib` |
+| Deduplication manager | Classifies each chunk NEW / DUPLICATE / ADOPT from metadata *and verified bytes*. | repository |
 | SQLite metadata repository | All metadata reads/writes; schema and invariants. | SQLite |
-| Local chunk store | Stores chunk bytes at `chunks/ab/cd/<sha256>`; stage + atomic publish. | filesystem |
+| Local chunk store | Stores chunk bytes at `chunks/ab/<sha256>`; stage + atomic publish. | filesystem |
 | Restoration engine | Reassembles a file chunk by chunk, verifying every hash. Read-only. | repository, chunk store, hashing |
-| Integrity auditor | Detects (and safely repairs) divergence between metadata and bytes. | repository, chunk store, hashing |
+| Integrity auditor | Read-only detection of divergence between metadata and bytes; a separate, explicit reconciler removes crash leftovers. | repository, chunk store, hashing |
 | Benchmark runner | Measures the pipeline on an isolated store. | orchestrator |
 | Capacity simulation engine | Pure analytical model from user assumptions. | none |
 

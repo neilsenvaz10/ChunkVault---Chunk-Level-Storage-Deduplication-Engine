@@ -8,11 +8,16 @@ from collections.abc import Iterator
 from fastapi import Request
 
 from app.core.config import Settings
+from app.core.services import Services
 from app.database.connection import connect
 
 
 def get_settings(request: Request) -> Settings:
     return request.app.state.settings
+
+
+def get_services(request: Request) -> Services:
+    return request.app.state.services
 
 
 def get_db(request: Request) -> Iterator[sqlite3.Connection]:

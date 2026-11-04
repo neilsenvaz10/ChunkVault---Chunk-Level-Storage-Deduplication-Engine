@@ -73,10 +73,18 @@ class Settings:
     db_path: Path
     cors_origins: tuple[str, ...]
     cdc: CDCConfig = field(default_factory=CDCConfig)
+    max_upload_bytes: int = 64 * 1024 * KIB
+    writer_lock_timeout_seconds: float = 30.0
+    # Staging files / running operations younger than this are assumed in flight.
+    staging_stale_seconds: float = 300.0
     app_name: str = APP_NAME
     app_version: str = APP_VERSION
 
     def __post_init__(self) -> None:
+        if self.max_upload_bytes <= 0:
+            raise ConfigurationError("max_upload_bytes must be positive")
+        if self.writer_lock_timeout_seconds < 0 or self.staging_stale_seconds < 0:
+            raise ConfigurationError("timeouts must not be negative")
         if not self.cors_origins:
             raise ConfigurationError("at least one CORS origin is required")
         for origin in self.cors_origins:
@@ -84,6 +92,10 @@ class Settings:
                 raise ConfigurationError(
                     f"CORS origin must be an explicit http(s) origin, got {origin!r}"
                 )
+
+    @property
+    def lock_path(self) -> Path:
+        return self.data_dir / "writer.lock"
 
     @property
     def chunks_dir(self) -> Path:
@@ -132,4 +144,21 @@ class Settings:
             max_chunk_size=get_int("CDC_MAX_CHUNK_SIZE", defaults.max_chunk_size),
             window_size=get_int("CDC_WINDOW_SIZE", defaults.window_size),
         )
-        return cls(data_dir=data_dir, db_path=db_path, cors_origins=origins, cdc=cdc)
+        def get_float(name: str, default: float) -> float:
+            raw = get(name)
+            if raw is None:
+                return default
+            try:
+                return float(raw)
+            except ValueError:
+                raise ConfigurationError(f"{ENV_PREFIX}{name} must be a number, got {raw!r}")
+
+        return cls(
+            data_dir=data_dir,
+            db_path=db_path,
+            cors_origins=origins,
+            cdc=cdc,
+            max_upload_bytes=get_int("MAX_UPLOAD_BYTES", 64 * 1024 * KIB),
+            writer_lock_timeout_seconds=get_float("WRITER_LOCK_TIMEOUT_SECONDS", 30.0),
+            staging_stale_seconds=get_float("STAGING_STALE_SECONDS", 300.0),
+        )

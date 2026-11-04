@@ -83,9 +83,10 @@ All transactions are explicit (`connection.transaction`, `BEGIN IMMEDIATE`, roll
 
 | Operation | Transactions |
 |---|---|
-| Upload | T1: operation + file(`uploading`). Chunk registration in short transactions. T2: chunks→`stored`, all `file_chunks`, file→`complete`, operation→`succeeded` (atomic). On failure: separate transaction marks file/operation `failed`. |
-| Delete | One transaction: file→`deleting`, delete file row (cascade lowers ref_counts), record operation. Then, after commit, delete chunk files whose `ref_count = 0` and remove their rows. |
-| Restore / audit | Read-only snapshot reads plus one short transaction to record the operation. |
+| Upload | T1: operation + file(`uploading`). T2: new chunk rows inserted as `stored`, all `file_chunks`, file→`complete`, operation→`succeeded` (atomic). On failure: T2 rolls back; a separate transaction marks file/operation `failed`. |
+| Delete | One transaction: record operation, delete the file row (cascade + triggers lower ref_counts), delete chunk rows that reached `ref_count = 0`. After commit, unlink those chunk files. The `deleting` status is not used by the engine. |
+| Restore | Short transactions to start/finish the `restore` operation; other reads are autocommit. |
+| Audit | Query-only connection, one deferred read transaction for a metadata snapshot; records nothing. |
 
 The filesystem is outside these transactions — see
 [consistency protocol](../architecture/consistency-protocol.md).

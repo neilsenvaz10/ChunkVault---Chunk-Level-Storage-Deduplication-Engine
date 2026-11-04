@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.core.services import build_services
 from app.database.connection import connect
 from app.database.init import initialize_database
 from app.main import create_app
@@ -22,6 +23,7 @@ def settings(tmp_path) -> Settings:
         data_dir=tmp_path / "data",
         db_path=tmp_path / "data" / "test.db",
         cors_origins=("http://localhost:5173",),
+        staging_stale_seconds=0,  # leftovers are reported immediately in tests
     )
 
 
@@ -65,3 +67,17 @@ def map_chunk(conn, file_id, index, h=H1, size=100):
 
 def ref_count(conn, h):
     return conn.execute("SELECT ref_count FROM chunks WHERE hash=?", (h,)).fetchone()[0]
+
+
+@pytest.fixture
+def svc(settings):
+    """Concrete services on an isolated temporary database and chunk store."""
+    settings.ensure_directories()
+    initialize_database(settings.db_path)
+    return build_services(settings)
+
+
+def make_data(seed: int, size: int) -> bytes:
+    import random
+
+    return random.Random(seed).randbytes(size)

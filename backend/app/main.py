@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.errors import register_exception_handlers
 from app.api.router import api_router
 from app.core.config import Settings
+from app.core.services import build_services
 from app.database.init import initialize_database
 from app.schemas.common import ErrorResponse
 
@@ -23,6 +24,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Startup: create data directories and the schema (idempotent, no data inserted).
         settings.ensure_directories()
         initialize_database(settings.db_path)
+        app.state.services = build_services(settings)
         yield
         # Shutdown: connections are per-request and already closed; nothing to release.
 
@@ -30,8 +32,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="ChunkVault API",
         version=settings.app_version,
         description=(
-            "Chunk-level storage deduplication engine. Phase 1 exposes only the "
-            "health and planned-endpoint listing; see /api/planned-endpoints."
+            "Chunk-level storage deduplication engine (single process, sequential "
+            "writes: run with ONE worker). Benchmark and simulation endpoints are "
+            "still planned; see /api/planned-endpoints."
         ),
         lifespan=lifespan,
         responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},

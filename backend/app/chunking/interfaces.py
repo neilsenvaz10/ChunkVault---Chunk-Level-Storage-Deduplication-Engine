@@ -1,4 +1,4 @@
-"""Rabin-style content-defined chunker: interface only (implemented in Phase 2).
+"""Rabin-style content-defined chunker: interface (implemented in chunking/rabin.py).
 
 Configuration lives in ``app.core.config.CDCConfig``; the algorithm
 specification is docs/architecture/cdc-specification.md.

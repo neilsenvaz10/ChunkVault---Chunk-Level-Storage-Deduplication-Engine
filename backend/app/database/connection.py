@@ -30,6 +30,9 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
         raise DatabaseError(f"cannot open database: {exc}") from exc
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # FULL: a committed transaction survives power loss (default NORMAL in WAL mode
+    # may lose the last commits). Part of the documented local durability model.
+    conn.execute("PRAGMA synchronous = FULL")
     conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     if str(db_path) != ":memory:":
         conn.execute("PRAGMA journal_mode = WAL")

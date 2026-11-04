@@ -1,7 +1,6 @@
 # CDC Specification (Rabin-style content-defined chunking)
 
-Status: **specification only.** Parameters are implemented as `CDCConfig`
-(`backend/app/core/config.py`); the algorithm and its correctness tests arrive in Phase 2.
+Status: **implemented in Phase 2** in `backend/app/chunking/rabin.py` (parameters in `CDCConfig`, `backend/app/core/config.py`). Pure Python; throughput is measured in Phase 6.
 
 ## Parameters
 
@@ -34,6 +33,16 @@ only nearby boundaries; later chunks keep their content and therefore their SHA-
 why CDC deduplicates shifted data where fixed-size chunking does not ([ADR-0001](../decisions/0001-cdc-over-fixed-size-chunking.md)).
 The irreducible polynomial and the lookup tables are fixed constants so the same input always
 produces the same chunks.
+
+## Implementation details (Phase 2)
+
+- Polynomial `P(x) = 0x3DA3358B4DC173` (degree 53, irreducible; the constant used by restic's chunker). `tests/test_cdc.py` checks `x^(2^53) = x (mod P)` and the absence of roots, which proves irreducibility for the prime degree 53.
+- Fingerprint of window `w[0..63]` = sum of `w[i] * x^(8*(63-i)) mod P`. Rolling update: `fp ^= OUT[outgoing]` (removes `w[0] * x^(8*63) mod P`), then `fp = (fp << 8 | incoming)`, `fp ^= MOD[fp >> 53]` (reduction table). Two 256-entry tables per window size.
+- The window state is reset at every chunk start. Bytes before position `min - window` cannot affect any test (the window is rebuilt from the last 64 bytes), so they are skipped.
+- First test at chunk length `min`; cut when `fp mod D == D - 1`; forced cut at `max`; the last chunk may be shorter than `min`.
+- Streaming: input is read in `read_size` blocks (default 64 KiB); memory is bounded by `max + read_size`. Boundaries do not depend on the read size (tested with 1 byte to 1 MiB reads).
+- `tests/test_cdc.py` compares the rolling chunker against a naive implementation that recomputes the full window polynomial at every position (two configurations): identical boundaries.
+- The 16 KiB average is a **design parameter**, not a guarantee: observed means on random data differ from it (the Phase 2 report lists measured values). CDC is not claimed to beat fixed-size chunking for in-place edits, where both change about one chunk.
 
 ## Rolling fingerprint ≠ SHA-256
 

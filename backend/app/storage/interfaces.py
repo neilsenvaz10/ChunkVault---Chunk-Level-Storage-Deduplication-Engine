@@ -1,8 +1,8 @@
-"""Content-addressed chunk store: interface only (implemented in Phase 3).
+"""Content-addressed chunk store: interface (implemented in storage/filesystem.py).
 
-Layout (planned): ``data/chunks/<h[0:2]>/<h[2:4]>/<hash>``; writes go to
-``data/staging/`` first and are published with an atomic same-volume rename.
-See docs/architecture/consistency-protocol.md.
+Layout: ``data/chunks/<h[0:2]>/<hash>``; writes go to ``data/staging/`` first and
+are published with an atomic same-volume rename. Implemented in
+``storage/filesystem.py``. See docs/architecture/consistency-protocol.md.
 """
 
 from __future__ import annotations
@@ -22,6 +22,12 @@ class ChunkStoreError(ChunkVaultError):
 
 class ChunkNotFoundError(ChunkStoreError):
     code = "chunk_not_found"
+
+
+class ChunkCorruptedError(ChunkStoreError):
+    """An existing stored chunk does not match its digest. Never overwritten."""
+
+    code = "chunk_corrupt"
 
 
 class ChunkWriteError(ChunkStoreError):

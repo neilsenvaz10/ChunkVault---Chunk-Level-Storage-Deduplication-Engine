@@ -119,9 +119,8 @@ def test_planned_endpoints_are_not_registered(client, app):
     registered = {(m, r.path) for r in app.routes for m in getattr(r, "methods", ())}
     for e in PLANNED_ENDPOINTS:
         assert (e.method, e.path) not in registered
-    assert client.post("/api/files").status_code in (404, 405)
-    assert client.get("/api/files").status_code == 404
     assert client.post("/api/benchmarks").status_code == 404
+    assert client.post("/api/simulations").status_code == 404
 
 
 def test_planned_schemas_exist_and_validate():

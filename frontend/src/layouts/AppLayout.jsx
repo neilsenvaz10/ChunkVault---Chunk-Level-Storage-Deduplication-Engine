@@ -19,7 +19,7 @@ export default function AppLayout() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          ChunkVault <small>Phase 1 · foundation</small>
+          ChunkVault <small>Phase 1 UI shell · backend engine in Phase 2</small>
         </div>
         <nav>
           {MODULES.map((m) => (

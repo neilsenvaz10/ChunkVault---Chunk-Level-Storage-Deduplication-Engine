@@ -1,4 +1,4 @@
-"""SHA-256 hashing service: interface only (implemented in Phase 2).
+"""SHA-256 hashing service: interface (implemented in hashing/sha256.py).
 
 SHA-256 provides content identification (the chunk's address) and integrity
 verification. It is unrelated to the rolling fingerprint used for boundaries.
