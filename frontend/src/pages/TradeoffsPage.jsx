@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { Card } from '../components/ui'
+import AdrExplorer from './AdrExplorer'
 
-// Educational comparisons. The reasoning mirrors docs/decisions/ (ADR-0001..0006).
+// Educational comparisons. The reasoning mirrors docs/decisions/ (ADR-0001..0007).
 // Scaled-architecture notes are conceptual: ChunkVault does not implement them.
 export const TRADEOFFS = [
   {
@@ -47,7 +49,7 @@ export const TRADEOFFS = [
   },
 ]
 
-export default function TradeoffsPage() {
+function Comparisons() {
   return (
     <>
       <p className="muted">
@@ -67,6 +69,19 @@ export default function TradeoffsPage() {
           <p>{t.scaled}</p>
         </Card>
       ))}
+    </>
+  )
+}
+
+export default function TradeoffsPage() {
+  const [tab, setTab] = useState('compare')
+  return (
+    <>
+      <div className="tabs" role="tablist" aria-label="Trade-off views">
+        <button role="tab" aria-selected={tab === 'compare'} className={tab === 'compare' ? 'active' : ''} onClick={() => setTab('compare')}>Trade-offs</button>
+        <button role="tab" aria-selected={tab === 'adr'} className={tab === 'adr' ? 'active' : ''} onClick={() => setTab('adr')}>Decision records (ADRs)</button>
+      </div>
+      {tab === 'compare' ? <Comparisons /> : <AdrExplorer />}
     </>
   )
 }

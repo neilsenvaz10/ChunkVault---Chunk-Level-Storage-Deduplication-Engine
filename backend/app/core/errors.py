@@ -43,3 +43,10 @@ class NotFoundError(ChunkVaultError):
 class ConflictError(ChunkVaultError):
     code = "conflict"
     status_code = 409
+
+
+class InvalidParametersError(ChunkVaultError):
+    """Individually valid parameters that are inconsistent with each other."""
+
+    code = "invalid_parameters"
+    status_code = 422

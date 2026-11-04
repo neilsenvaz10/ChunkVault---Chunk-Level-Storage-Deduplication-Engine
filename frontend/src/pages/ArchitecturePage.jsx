@@ -1,11 +1,21 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Card } from '../components/ui'
-import { ComponentDetails, ComponentDiagram, DataFlowDiagram, SequenceDiagram } from './architecture/diagrams'
+import ApiExplorer from './architecture/ApiExplorer'
+import CdcExplorer from './architecture/CdcExplorer'
+import ConsistencyView from './architecture/ConsistencyView'
+import { ComponentDetails, ComponentDiagram, DataFlowDiagram, DiagramViewport, LayerLegend, SequenceDiagram } from './architecture/diagrams'
 import { COMPONENTS, CONCEPTS, FOCUS_ALIASES, RESTORE_SEQUENCE, UPLOAD_SEQUENCE } from './architecture/data'
+import { RESTORE_STAGES, UPLOAD_STAGES } from './architecture/lifecycles'
+import Walkthrough from './architecture/Walkthrough'
 
 const TABS = [
   ['components', 'Components'],
+  ['uploadlife', 'Upload lifecycle'],
+  ['restorelife', 'Restore lifecycle'],
+  ['cdc', 'Chunking (CDC)'],
+  ['consistency', 'Consistency protocol'],
+  ['api', 'API explorer'],
   ['upload', 'Upload sequence'],
   ['restore', 'Restore sequence'],
   ['dataflow', 'Data flow'],
@@ -20,7 +30,7 @@ export default function ArchitecturePage() {
 
   return (
     <>
-      <div className="tabs" role="tablist">
+      <div className="tabs" role="tablist" aria-label="Architecture views">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
             {label}
@@ -31,13 +41,22 @@ export default function ArchitecturePage() {
       {tab === 'components' && (
         <Card title="Component diagram">
           <p className="muted">
-            Client → React → FastAPI → CDC → SHA-256 → Deduplication → SQLite + local chunk store, plus the restoration and
-            integrity-auditing components. One process with modular internals — not microservices. Select a component.
+            Browser → React → FastAPI → CDC → SHA-256 → Deduplication → SQLite + local chunk store, plus restoration and integrity
+            auditing. One process with modular internals — these are the project&rsquo;s real modules, not microservices.
+            Select a component; its dependencies are highlighted.
           </p>
-          <ComponentDiagram selectedId={selectedId} onSelect={setSelectedId} />
-          <ComponentDetails component={selected} />
+          <LayerLegend />
+          <DiagramViewport minWidth={640} label="Component diagram">
+            <ComponentDiagram selectedId={selectedId} onSelect={setSelectedId} />
+          </DiagramViewport>
+          <ComponentDetails component={selected} onSelect={setSelectedId} />
         </Card>
       )}
+      {tab === 'uploadlife' && <Walkthrough key="up" kind="upload" stages={UPLOAD_STAGES} />}
+      {tab === 'restorelife' && <Walkthrough key="re" kind="restore" stages={RESTORE_STAGES} />}
+      {tab === 'cdc' && <CdcExplorer />}
+      {tab === 'consistency' && <ConsistencyView />}
+      {tab === 'api' && <ApiExplorer />}
       {tab === 'upload' && (
         <Card title="Upload sequence">
           <p className="muted">Select a step for its explanation.</p>

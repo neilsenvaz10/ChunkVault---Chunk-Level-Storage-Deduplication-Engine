@@ -52,9 +52,9 @@ def test_cors_allows_dev_origin_only(client):
 
 
 def test_openapi_documented(client):
-    spec = client.get("/openapi.json").json()
+    spec = client.get("/api/openapi.json").json()
     assert "/api/health" in spec["paths"]
-    assert client.get("/docs").status_code == 200
+    assert client.get("/api/docs").status_code == 200
 
 
 # ---- error format ----------------------------------------------------------

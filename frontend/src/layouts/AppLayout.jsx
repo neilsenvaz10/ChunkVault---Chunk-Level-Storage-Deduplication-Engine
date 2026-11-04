@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { PageHeader, StatusBadge } from '../components/ui'
 import { useHealth } from '../hooks/useApi'
@@ -23,7 +23,9 @@ export function HealthIndicator() {
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(readCollapsed)
+  const [menuOpen, setMenuOpen] = useState(false) // small screens only
   const { pathname } = useLocation()
+  useEffect(() => setMenuOpen(false), [pathname])
   const mod = moduleFor(pathname)
 
   const toggle = () => {
@@ -38,8 +40,9 @@ export default function AppLayout() {
   }
 
   return (
-    <div className={`shell ${collapsed ? 'is-collapsed' : ''}`}>
-      <aside className="sidebar">
+    <div className={`shell ${collapsed ? 'is-collapsed' : ''} ${menuOpen ? 'menu-open' : ''}`}>
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      <aside className="sidebar" id="primary-nav">
         <div className="brand">
           <span className="brand-name">ChunkVault</span>
           <small>Chunk-level deduplication</small>
@@ -59,10 +62,12 @@ export default function AppLayout() {
       </aside>
       <div className="main">
         <header className="topbar">
-          <span className="muted">Single-machine prototype · sequential writes</span>
+          <button className="menu-btn" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} aria-controls="primary-nav"
+                  aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}>☰ Menu</button>
+          <span className="muted topbar-note">Single-machine prototype · sequential writes</span>
           <HealthIndicator />
         </header>
-        <main className="content">
+        <main className="content" id="main-content" tabIndex={-1}>
           {mod && (
             <PageHeader
               title={mod.label}

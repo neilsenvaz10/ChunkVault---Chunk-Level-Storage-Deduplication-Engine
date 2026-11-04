@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { AsyncState, Card, Hash, Pagination, StatusBadge } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
+import RefCountWalkthrough from './RefCountWalkthrough'
+import { DiagramViewport } from './architecture/diagrams'
 import { formatInt } from '../utils/format'
 
 const PAGE = 15
@@ -141,7 +143,9 @@ export default function DatabasePage() {
         return (
           <>
             <Card title="Entity relationships" aside={<StatusBadge tone="ok">live row counts</StatusBadge>}>
-              <ErDiagram tables={s.tables} selected={table} onSelect={pick} />
+              <DiagramViewport minWidth={560} label="Entity relationship diagram">
+                <ErDiagram tables={s.tables} selected={table} onSelect={pick} />
+              </DiagramViewport>
               <p className="muted">Select a table box to browse it. Schema version {s.schema_version}. Foreign keys are enforced on every connection.</p>
               <div className={`notice ${inv.mismatches === 0 ? 'notice-ok' : 'notice-error'}`}>
                 <strong>Reference-count invariant</strong>
@@ -200,6 +204,8 @@ export default function DatabasePage() {
                 )}
               </AsyncState>
             </Card>
+
+            <RefCountWalkthrough />
 
             <div className="two-col">
               <Card title="Record detail">

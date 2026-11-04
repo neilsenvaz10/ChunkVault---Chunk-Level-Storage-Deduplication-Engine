@@ -1,6 +1,6 @@
 # API Contracts
 
-Interactive docs for what is actually served: `/docs` and `/openapi.json` (FastAPI-generated).
+Interactive docs for what is actually served: `/api/docs` and `/api/openapi.json` (FastAPI-generated).
 
 ## Implemented
 
@@ -19,6 +19,8 @@ Interactive docs for what is actually served: `/docs` and `/openapi.json` (FastA
 | POST | `/api/integrity/reconcile` | explicit cleanup → `200 ReconcileResponse` (every action listed, plus a post-repair audit); `409 writer_busy` |
 
 | GET | `/api/chunks/{hash}` | `200 ChunkDetailResponse`: the chunk plus every manifest row referencing it; `404`; `422` malformed hash |
+| GET | `/api/system/config` | `200 SystemConfigResponse`: the chunking parameters, boundary rule, polynomial, upload limit and relative chunk-path layout the server uses |
+| GET | `/api/system/chunking-demo?seed&size&insert_at&insert_len&fixed_size` | `200 ChunkingDemoResponse`: runs the real chunker and a fixed-size chunker on **seeded generated data** with one insertion and reports chunk boundaries and reuse. Read-only, bounded (size 16 KiB–512 KiB, insertion ≤ 4 KiB), stores nothing; `422 validation_error` / `invalid_parameters` |
 | GET | `/api/inspect/schema` | `200 SchemaResponse`: whitelisted tables, columns, primary/foreign keys, row counts, ref-count invariant status |
 | GET | `/api/inspect/tables/{table}/rows?limit&offset` | `200 TableRowsResponse` for `files`, `chunks`, `file_chunks` or `operations` only (read-only, paginated, max 200 rows) |
 

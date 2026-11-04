@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import CasView from '../components/CasView'
 import ChunkMap, { Legend } from '../components/ChunkMap'
 import { AsyncState, Card, ConfirmDialog, ErrorNotice, Hash, StatusBadge } from '../components/ui'
 import { useUploadHistory } from '../context/UploadHistory'
@@ -147,6 +148,8 @@ export default function FileDetailPage() {
                 <Legend items={legend} />
                 <ChunkMap chunks={f.chunks} classify={classify} selectedIndex={selected?.chunk_index} onSelect={setSelected} />
               </Card>
+
+              <CasView file={f} selectedIndex={selected?.chunk_index} onSelect={setSelected} />
 
               {selected && <ChunkInspector chunk={selected} fileId={f.file_id} />}
 

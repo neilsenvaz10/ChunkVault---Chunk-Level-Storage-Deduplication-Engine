@@ -106,3 +106,44 @@ export const planned = {
     { method: 'POST', path: '/api/simulations', summary: 'Run the analytical capacity model', request_schema: 'SimulationRequest', response_schema: 'SimulationResponse', phase: 7, status: 'planned' },
   ],
 }
+
+export const systemConfig = {
+  cdc: { min_chunk_size: 4096, avg_chunk_size: 16384, max_chunk_size: 131072, window_size: 64, boundary_divisor: 12288,
+    boundary_remainder: 12287, polynomial: '0x3da3358b4dc173', polynomial_degree: 53 },
+  max_upload_bytes: 64 * 1024 * 1024,
+  chunk_path_layout: 'chunks/<first 2 hex digits of SHA-256>/<SHA-256>',
+}
+
+const dc = (sizes, flags) => {
+  let off = 0
+  return sizes.map((size, i) => { const c = { offset: off, size, reused: flags ? flags[i] : null }; off += size; return c })
+}
+export const chunkingDemo = {
+  seed: 7, original_size: 60000, modified_size: 60037, insert_at: 100, insert_len: 37, fixed_chunk_size: 16384,
+  cdc: { scheme: 'content-defined (Rabin-style)', original_chunks: dc([20000, 20000, 20000]), modified_chunks: dc([20037, 20000, 20000], [false, true, true]),
+    reused_chunks: 2, reused_bytes: 40000, reuse_percent: 66.6 },
+  fixed: { scheme: 'fixed-size (16384 B)', original_chunks: dc([16384, 16384, 16384, 10848]), modified_chunks: dc([16384, 16384, 16384, 10885], [false, false, false, false]),
+    reused_chunks: 0, reused_bytes: 0, reuse_percent: 0 },
+  note: 'Computed on seeded generated data by the implemented chunker, not stored. Results describe this input only; CDC does not guarantee better reuse for every dataset.',
+}
+
+export const openapi = {
+  paths: {
+    '/api/files': {
+      post: { summary: 'Upload a file', requestBody: { content: { 'multipart/form-data': { schema: { $ref: '#/components/schemas/Body_upload' } } } },
+        responses: { 201: { description: 'Successful Response', content: { 'application/json': { schema: { $ref: '#/components/schemas/UploadResponse' } } } }, 413: { description: 'Payload Too Large' } } },
+      get: { summary: 'List files', parameters: [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Successful Response', content: { 'application/json': { schema: { $ref: '#/components/schemas/FileListResponse' } } } } } },
+    },
+    '/api/integrity/audit': { post: { summary: 'Read-only consistency audit', responses: { 200: { description: 'OK' } } } },
+    '/api/files/{file_id}': { delete: { summary: 'Delete a logical file', parameters: [{ name: 'file_id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'OK' }, 404: { description: 'Not Found' } } } },
+    '/api/_secret': { get: { summary: 'not annotated', responses: { 200: { description: 'OK' } } } },
+    '/openapi-internal': { get: { summary: 'ignored (not under /api)', responses: {} } },
+  },
+  components: { schemas: {
+    Body_upload: { type: 'object', required: ['file'], properties: { file: { type: 'string', description: 'The file' } } },
+    UploadResponse: { type: 'object', required: ['file_id', 'chunk_count'], properties: { file_id: { type: 'string' }, chunk_count: { type: 'integer' }, chunk_outcomes: { type: 'array', items: { $ref: '#/components/schemas/Outcome' } } } },
+    Outcome: { type: 'object', properties: { decision: { type: 'string', enum: ['new', 'reused'] } } },
+    FileListResponse: { type: 'object', properties: { total: { type: 'integer' } } },
+  } },
+}

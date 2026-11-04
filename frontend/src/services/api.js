@@ -95,6 +95,10 @@ export const api = {
   inspectSchema: (signal) => request('/api/inspect/schema', { signal }),
   inspectRows: (table, { limit = 25, offset = 0 } = {}, signal) =>
     request(`/api/inspect/tables/${encodeURIComponent(table)}/rows${qs({ limit, offset })}`, { signal }),
+  systemConfig: (signal) => request('/api/system/config', { signal }),
+  chunkingDemo: (params = {}, signal) => request(`/api/system/chunking-demo${qs(params)}`, { signal }),
+  // FastAPI's generated contract, used by the API explorer (never hand-copied).
+  openapi: (signal) => request('/api/openapi.json', { signal }),
   audit: (body = {}, signal) => request('/api/integrity/audit', { method: 'POST', body, signal }),
   reconcile: (signal) => request('/api/integrity/reconcile', { method: 'POST', signal }),
 }

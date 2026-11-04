@@ -9,7 +9,7 @@ the content-addressed chunk store, verified restore, reference-counted delete, t
 integrity audit, explicit reconciliation and storage statistics work through the API.
 The React app (Phase 3) exposes all of it: upload, chunk-level inspection and comparison, restore,
 delete, a read-only database explorer, architecture diagrams, the integrity audit and the rendered
-project documentation. Benchmarking and capacity simulation are still not implemented and their
+project documentation. Phase 4 adds step-by-step upload and restore lifecycles, a chunking explorer (CDC vs fixed-size computed by the real chunker), a consistency-protocol visualisation, an API explorer driven by the OpenAPI document and an ADR explorer, with a responsive layout. Benchmarking and capacity simulation are still not implemented and their
 pages say so. It is a sequential, single-process prototype (**run uvicorn with
 one worker**); there is no distributed functionality.
 
@@ -23,7 +23,7 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app.main:app --reload --port 8000
 ```
 
-API docs: http://127.0.0.1:8000/docs · health: http://127.0.0.1:8000/api/health
+API docs: http://127.0.0.1:8000/api/docs · health: http://127.0.0.1:8000/api/health
 
 Example: `curl -F file=@some.bin http://127.0.0.1:8000/api/files`, then `GET /api/storage/stats`.
 End-to-end check on a throw-away store: `.venv/Scripts/python ../scripts/verify_phase2.py`.

@@ -27,6 +27,7 @@ export const SECTIONS = [
     ['Consistency protocol & failure handling', 'architecture/consistency-protocol.md'],
     ['Hardening review', 'architecture/hardening-review.md'],
     ['Security & scalability limitations', 'architecture/security-and-scalability.md'],
+    ['Actual data vs illustration', 'architecture/explainability.md'],
   ]],
   ['Decisions & roadmap', [
     ['ADR-0001 CDC over fixed-size chunking', 'decisions/0001-cdc-over-fixed-size-chunking.md'],
@@ -35,6 +36,7 @@ export const SECTIONS = [
     ['ADR-0004 Local filesystem chunk store', 'decisions/0004-local-filesystem-chunk-store.md'],
     ['ADR-0005 Sequential processing', 'decisions/0005-sequential-processing.md'],
     ['ADR-0006 Separate metadata and bytes', 'decisions/0006-separate-metadata-and-bytes.md'],
+    ['ADR-0007 Consistency and recovery', 'decisions/0007-consistency-and-recovery.md'],
     ['Roadmap', 'roadmap/phases.md'],
   ]],
 ]

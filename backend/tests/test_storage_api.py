@@ -182,7 +182,7 @@ def test_no_internal_paths_in_responses(client, settings):
 
 
 def test_openapi_lists_storage_endpoints_and_registry_only_has_the_unbuilt(client):
-    paths = client.get("/openapi.json").json()["paths"]
+    paths = client.get("/api/openapi.json").json()["paths"]
     for p in ("/api/files", "/api/files/{file_id}", "/api/files/{file_id}/download", "/api/chunks",
               "/api/storage/stats", "/api/integrity/audit"):
         assert p in paths

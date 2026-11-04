@@ -38,6 +38,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "still planned; see /api/planned-endpoints."
         ),
         lifespan=lifespan,
+        # under /api so the dev proxy reaches them and the SPA keeps its own /docs route
+        docs_url="/api/docs",
+        openapi_url="/api/openapi.json",
+        redoc_url=None,
         responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     )
     app.state.settings = settings
