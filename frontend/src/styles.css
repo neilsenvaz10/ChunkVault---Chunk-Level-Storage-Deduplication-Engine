@@ -1,0 +1,41 @@
+:root {
+  --bg: #0f1419; --panel: #171d25; --line: #263040; --text: #d8dee9; --muted: #8a96a8;
+  --accent: #5ab0ff; --ok: #4cc38a; --warn: #e5b05b; --err: #ef6b6b;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text); background: var(--bg);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+h2 { font-size: 0.95rem; margin: 0; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: 0.85em; color: var(--accent); }
+button { background: var(--line); color: var(--text); border: 0; border-radius: 4px; padding: 0.3rem 0.7rem; cursor: pointer; }
+
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 260px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--line); padding: 1rem 0; }
+.brand { font-weight: 700; padding: 0 1rem 1rem; font-size: 1.1rem; }
+.brand small { display: block; font-weight: 400; color: var(--muted); font-size: 0.75rem; }
+.sidebar nav a { display: flex; justify-content: space-between; align-items: center; padding: 0.55rem 1rem; color: var(--text); text-decoration: none; border-left: 3px solid transparent; font-size: 0.9rem; }
+.sidebar nav a:hover { background: #1e2631; }
+.sidebar nav a.active { border-left-color: var(--accent); background: #1e2631; }
+.sidebar nav a i { font-style: normal; font-size: 0.7rem; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 0.7rem 1.5rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+.content { padding: 1.5rem; max-width: 1000px; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
+.card p { margin: 0.3rem 0; line-height: 1.5; }
+.card ul { margin: 0.3rem 0; padding-left: 1.2rem; line-height: 1.6; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; }
+
+.badge { display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.5rem; border-radius: 10px; border: 1px solid currentColor; }
+.badge-ok { color: var(--ok); } .badge-warn { color: var(--warn); }
+.badge-error { color: var(--err); } .badge-muted { color: var(--muted); }
+
+@media (max-width: 720px) {
+  .shell { flex-direction: column; }
+  .sidebar { width: 100%; }
+}

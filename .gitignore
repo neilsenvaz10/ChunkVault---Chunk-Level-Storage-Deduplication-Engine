@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Environment
+.env
+
+# Runtime data (directories are kept via .gitkeep)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/chunks/*
+data/staging/*
+data/benchmarks/*
+!data/chunks/.gitkeep
+!data/staging/.gitkeep
+!data/benchmarks/.gitkeep
+
+# Scratch
+scratch_*.log
