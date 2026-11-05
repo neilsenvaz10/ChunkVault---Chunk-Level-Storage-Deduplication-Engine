@@ -77,6 +77,9 @@ class Settings:
     writer_lock_timeout_seconds: float = 30.0
     # Staging files / running operations younger than this are assumed in flight.
     staging_stale_seconds: float = 300.0
+    # Advisory free-space protection for uploads: this much free space must remain on the chunk store's
+    # volume on top of the bytes an upload may add (see Uploader._check_free_space). 0 disables the margin.
+    free_space_reserve_bytes: int = 16 * 1024 * KIB
     # The fault lab damages ONLY temporary stores it creates itself, but it is still off unless
     # explicitly enabled (CHUNKVAULT_ENABLE_FAULT_LAB=1).
     fault_lab_enabled: bool = False
@@ -88,6 +91,8 @@ class Settings:
     def __post_init__(self) -> None:
         if self.max_upload_bytes <= 0:
             raise ConfigurationError("max_upload_bytes must be positive")
+        if self.free_space_reserve_bytes < 0:
+            raise ConfigurationError("free_space_reserve_bytes must not be negative")
         if self.writer_lock_timeout_seconds < 0 or self.staging_stale_seconds < 0:
             raise ConfigurationError("timeouts must not be negative")
         if not self.allowed_hosts or "*" in self.allowed_hosts:
@@ -168,6 +173,7 @@ class Settings:
             max_upload_bytes=get_int("MAX_UPLOAD_BYTES", 64 * 1024 * KIB),
             writer_lock_timeout_seconds=get_float("WRITER_LOCK_TIMEOUT_SECONDS", 30.0),
             staging_stale_seconds=get_float("STAGING_STALE_SECONDS", 300.0),
+            free_space_reserve_bytes=get_int("FREE_SPACE_RESERVE_BYTES", 16 * 1024 * KIB),
             allowed_hosts=tuple(h.strip() for h in (get("ALLOWED_HOSTS") or "localhost,127.0.0.1,[::1]").split(",") if h.strip()),
             fault_lab_enabled=(get("ENABLE_FAULT_LAB") or "").strip().lower() in ("1", "true", "yes"),
         )

@@ -21,6 +21,7 @@ Durability model (local filesystem, single machine):
 from __future__ import annotations
 
 import os
+import shutil
 import uuid
 from collections.abc import Iterator
 from enum import StrEnum
@@ -155,6 +156,18 @@ class FilesystemChunkStore:
         for entry in sorted(self.staging_dir.iterdir()):
             if entry.is_file():
                 yield entry
+
+    def free_bytes(self) -> int | None:
+        """Free bytes on the filesystem(s) holding the chunk store: the chunks directory and the staging directory
+        (normally the same volume; if they differ, the smaller figure). ``None`` if the OS cannot say, in which case
+        callers skip the advisory check rather than block uploads."""
+        try:
+            frees = {}
+            for d in (self.chunks_dir, self.staging_dir):
+                frees[os.stat(d).st_dev] = shutil.disk_usage(d).free
+            return min(frees.values())
+        except OSError:
+            return None
 
     def disk_usage(self) -> tuple[int, int]:
         """(published chunk file count, total bytes) from file sizes."""

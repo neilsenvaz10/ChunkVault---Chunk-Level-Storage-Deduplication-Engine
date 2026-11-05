@@ -1,10 +1,15 @@
 import Chart from '../../components/Chart'
 import { Card, MetricTile, StatusBadge } from '../../components/ui'
-import { formatBytes, formatDate, formatInt, formatPercent, formatRate, formatRatio, formatSeconds } from '../../utils/format'
+import { formatBytes, formatDate, formatInt, formatPercent, formatRate, formatRatio, formatSecPerMiB, formatSeconds } from '../../utils/format'
 
 // unique per saved run even when the same workload and size were run twice
 const runLabel = (r) => `${r.spec.workload} ${Math.round(r.spec.size_bytes / 1024)}K ${String(r.job_id).slice(0, 4)}`
 const sumBytes = (r) => r.iterations[0].uploads.reduce((n, u) => n + u.size_bytes, 0)
+
+// Cache state is only stated when the result declares it; older results say nothing, so the UI says "not recorded".
+const cacheText = (r) => (r.conditions
+  ? `${r.conditions.cache_state} — ${r.conditions.cache_note}`
+  : 'not recorded in this saved result')
 
 export function PipelineView({ r }) {
   const s = r.summary
@@ -39,6 +44,7 @@ export function PipelineView({ r }) {
             <tr><th>Iterations</th><td>{r.spec.iterations}</td></tr>
             <tr><th>Chunking parameters</th><td>min {formatBytes(env.cdc.min_chunk_size)} · target {formatBytes(env.cdc.avg_chunk_size)} · max {formatBytes(env.cdc.max_chunk_size)} · window {env.cdc.window_size} B · {env.chunker}</td></tr>
             <tr><th>Runtime environment</th><td>{env.implementation} {env.python} · {env.platform} · {env.cpu_count} CPUs · SQLite {env.sqlite_version}</td></tr>
+            <tr><th>Cache state</th><td>{cacheText(r)}</td></tr>
             <tr><th>Finished</th><td>{formatDate(r.finished_at)}</td></tr>
           </tbody>
         </table>
@@ -51,9 +57,14 @@ export function PipelineView({ r }) {
               {stat('Upload throughput', s.upload_throughput_mib_s, formatRate)}
               {stat('Restore time', s.restore_total_seconds, formatSeconds)}
               {stat('Restore throughput', s.restore_throughput_mib_s, formatRate)}
+              {s.upload_seconds_per_mib && stat('Upload seconds per MiB', s.upload_seconds_per_mib, formatSecPerMiB)}
+              {s.restore_seconds_per_mib && stat('Restore seconds per MiB', s.restore_seconds_per_mib, formatSecPerMiB)}
             </tbody>
           </table>
         </div>
+        {!s.upload_seconds_per_mib && (
+          <p className="muted">Seconds per MiB was not recorded in this saved result (it was saved before that figure existed); nothing has been back-filled.</p>
+        )}
         <h3>Individual runs</h3>
         <div className="table-wrap">
           <table aria-label="Individual runs">
@@ -98,6 +109,15 @@ export function PipelineView({ r }) {
             <tr><th>Chunks generated / unique / reused</th><td>{formatInt(st.chunks_generated)} / {formatInt(st.unique_chunks)} / {formatInt(st.reused_chunks)}</td></tr>
             <tr><th>Average chunk size</th><td>{formatBytes(Math.round(st.avg_chunk_bytes || 0))}</td></tr>
             <tr><th>SQLite database size</th><td>{formatBytes(st.database_bytes)}</td></tr>
+            {st.footprint_ratio !== undefined ? (
+              <>
+                <tr><th>On-disk footprint (SQLite file + chunk files)</th><td>{formatBytes(st.footprint_bytes)} = {formatBytes(st.database_bytes)} database + {formatBytes(st.chunk_store_bytes)} chunk files</td></tr>
+                <tr><th>On-disk footprint ratio</th><td>{formatRatio(st.footprint_ratio)} = logical bytes {formatBytes(st.logical_bytes)} ÷ footprint {formatBytes(st.footprint_bytes)}</td></tr>
+                <tr><th>Footprint savings</th><td>{formatPercent(st.footprint_savings_percent)} (negative when metadata overhead exceeds the reuse; excludes filesystem block rounding)</td></tr>
+              </>
+            ) : (
+              <tr><th>On-disk footprint ratio</th><td className="muted">not recorded in this saved result (saved before this figure existed)</td></tr>
+            )}
             <tr><th>Database growth over the empty schema</th><td>{formatBytes(st.database_overhead_bytes)} for {formatInt(st.manifest_rows)} manifest rows (page-granular: small runs may show 0)</td></tr>
           </tbody>
         </table>
@@ -135,7 +155,7 @@ export function ComparisonView({ r }) {
         <div className="table-wrap">
           <table aria-label="CDC versus fixed-size results">
             <thead>
-              <tr><th>Case</th><th>Scheme</th><th>Chunks</th><th>Avg chunk</th><th>Reused chunks</th><th>Reused bytes</th><th>Savings</th><th>Processing time (median)</th></tr>
+              <tr><th>Case</th><th>Scheme</th><th>Chunks</th><th>Avg chunk</th><th>Reused chunks</th><th>Reused bytes</th><th>Savings</th><th>Processing time (median)</th><th>Seconds per MiB (median)</th></tr>
             </thead>
             <tbody>
               {r.cases.flatMap((c) => ['cdc', 'fixed'].map((k) => (
@@ -143,6 +163,7 @@ export function ComparisonView({ r }) {
                   {k === 'cdc' && <td rowSpan="2"><strong>{c.title}</strong><br /><small className="muted">{c.note}</small><br /><StatusBadge tone={c.verdict === 'CDC saves more' ? 'ok' : c.verdict === 'no meaningful difference' ? 'muted' : 'warn'}>{c.verdict}</StatusBadge></td>}
                   <td>{k === 'cdc' ? 'CDC' : 'Fixed-size'}</td><td>{c[k].chunk_count}</td><td>{formatBytes(Math.round(c[k].avg_chunk_bytes))}</td>
                   <td>{c[k].reused_chunks}</td><td>{formatBytes(c[k].reused_bytes)}</td><td>{formatPercent(c[k].savings_percent)}</td><td>{formatSeconds(c[k].processing_seconds.median)}</td>
+                  <td>{c[k].processing_seconds_per_mib ? formatSecPerMiB(c[k].processing_seconds_per_mib.median) : '—'}</td>
                 </tr>
               )))}
             </tbody>

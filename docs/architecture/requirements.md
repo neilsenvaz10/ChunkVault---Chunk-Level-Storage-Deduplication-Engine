@@ -1,7 +1,8 @@
 # Requirements and Assumptions
 
 Derived from the Phase 1–5 project briefs. The original System Design Report and Feasibility
-Report were not available in the repository, so this list has **not** been checked against them.
+Report were later checked against the implementation requirement by requirement; see
+[the traceability matrix](../verification/requirements-traceability.md).
 
 ## Functional requirements
 

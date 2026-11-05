@@ -104,3 +104,13 @@ curl -X POST localhost:8000/api/benchmarks -H "content-type: application/json" \
 curl localhost:8000/api/benchmarks/<job_id>          # progress, then the full result
 # tests: cd backend && python -m pytest tests/test_benchmarks.py
 ```
+
+## Reporting additions (2026-11-05)
+
+New benchmark runs also record, from the same measured timings and byte counts:
+
+- **Seconds per MiB** for each upload and restore (`seconds / (bytes / 2^20)`, the reciprocal view of MiB/s), summarised across iterations, and for the processing time in the CDC-vs-fixed comparison.
+- **On-disk footprint ratio** for pipeline benchmarks. Footprint bytes = the SQLite database file (after a full checkpoint, so it includes the empty schema and indexes) + the sizes of all chunk files. Ratio = logical bytes uploaded / footprint bytes; savings % = 100 x (logical - footprint) / logical, which is negative when metadata overhead exceeds what reuse saved. Filesystem block rounding, the SQLite -wal/-shm files and the empty staging directory are not counted. The payload-only deduplication ratio is reported separately. The CDC-vs-fixed comparison has no database, so it compares payload bytes only.
+- **Cache state: `unknown`.** The operating-system file cache is neither flushed, inspected nor controlled, so no run is called cold or warm.
+
+Results saved before these fields existed were not changed or back-filled; the Performance page shows "not recorded in this saved result" for them. The 4 MiB per-file limit is unchanged, so no tens-of-MiB throughput is reported.

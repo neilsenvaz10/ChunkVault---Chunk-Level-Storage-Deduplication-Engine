@@ -8,20 +8,20 @@ Nothing has been committed or pushed as part of Phase 6; the working tree holds 
 **Ready with documented limitations.**
 
 - The system works end to end, every automated and manual check below passed after fixes, and no Critical or High issue is open.
-- **Submission against the original reports is not established:** the System Design Report and Feasibility Report are absent from the repository, so report alignment is **BLOCKED** ([requirements-traceability.md](requirements-traceability.md)). If the submission requires proof of alignment, that gate is unmet until the reports are supplied.
+- **Alignment with the original reports is completed and the identified gaps are closed or documented** (sections I and J): the one implementation gap (no free-space check before upload) is implemented as an advisory preflight with disk-full handling; three of four measurement/reporting gaps are implemented for new benchmark runs; two items remain as documented limitations (4 MiB benchmark cap; footprint ratio for pipeline benchmarks only). The original academic reports were reviewed but are not stored in the public repository.
 
 ## A. Requirement coverage
 
-Interim matrix against `docs/architecture/requirements.md` (FR1–FR13, NFR1–NFR7): all verified except **NFR3 (durability under power loss), reviewed only** — see [requirements-traceability.md](requirements-traceability.md). Coverage of the *original* reports: **not assessed (BLOCKED)**.
+The formal matrix against the original reports (section I) supersedes the earlier interim matrix: 34 System Design Report rows and 28 Feasibility Report rows, each with implementation, test or script evidence and a status. Of the project's own requirements (`docs/architecture/requirements.md`, FR1–FR13, NFR1–NFR7), all are verified except **NFR3 (durability under power loss), reviewed only**.
 
-## B. Test evidence (final run, 2026-11-04)
+## B. Test evidence (Phase 6 final run, 2026-11-04 — historical; later runs are in section J)
 
 | Check | Result |
 |---|---|
-| `cd backend; .venv/Scripts/python -m pytest` | **402 passed** (334 before Phase 6 + 53 security + 15 docs-consistency) |
+| `cd backend; .venv/Scripts/python -m pytest` | **401 passed** (334 before Phase 6 + 53 security + 14 docs-consistency) |
 | `.venv/Scripts/python ../scripts/verify_phase2.py` | **27/27** |
 | `.venv/Scripts/python ../scripts/verify_phase6.py` (new, independent) | **74/74**: Tests A–F, database integrity, 9 fault scenarios, benchmark and simulation verification |
-| `cd frontend; npm test` | **130 passed** (5 files; 128 at the first Phase 6 run, +2 reconciliation-status regression tests) |
+| `cd frontend; npm test` | **128 passed** (5 files) |
 | `cd frontend; npm run build` | **built**; one non-blocking warning: some bundles exceed 500 kB (Mermaid is lazy-loaded) |
 | Browser run (built-in browser, isolated store) | see section D |
 
@@ -61,7 +61,7 @@ Measured Phase 5 figures still stand (`docs/architecture/benchmarking.md`): end-
 
 ## F. Limitations and open items
 
-1. **Original reports missing — alignment BLOCKED** (no invented requirements).
+1. **Report alignment (Low, documented):** benchmarks remain capped at 4 MiB per file, so no tens-of-MiB throughput is reported; the aggregate footprint ratio exists for pipeline benchmarks only. The free-space check is advisory, not a guarantee against concurrent disk exhaustion. Details: requirements-traceability.md, section C.
 2. No authentication; single user, loopback only; single writer (security-review.md, "Deployment limitations").
 3. Pure-Python chunker: a few MiB/s; not a performance claim about other systems.
 4. Power-loss durability not tested (reviewed only); Windows directory `fsync` limits documented.
@@ -104,3 +104,78 @@ New: `backend/app/api/guard.py`, `backend/tests/test_security.py`, `backend/test
 ## H. Reconciliation status message (post-6.1 fix)
 
 Defect (UI, low): after a reconciliation the Reliability dashboard still showed "Verification status … detection only; nothing was changed", which was wrong while "Recovery actions" showed a repair had run. Fix: the hint now depends on where the figures came from — a read-only audit says "read-only audit; nothing was changed"; a reconciliation that acted says "reconciliation modified storage (N actions); counts are from the audit run right after the repair"; one that did nothing says "reconciliation ran and changed nothing …"; a fresh audit afterwards reverts to the read-only text. Regression tests: `phase5.test.jsx` (full audit → reconcile → re-audit flow, and the hint function for 0, 1 and several actions). Affected suites re-run: frontend 130 passed.
+
+## I. Alignment with the original reports (Phase 6.1)
+
+Sources read in full: *System Design Report* (7 pages), *Feasibility Report* and the *System Architecture (Single-Machine Prototype)* diagram, all by Krishna Lohana and Neilsen Vaz (D12A, System Design Micro-Project). They were supplied as PDFs and are not stored in `docs/references/`.
+
+| Result | Count / detail |
+|---|---|
+| Matrix rows | 34 (design report) + 28 (feasibility report); diagram compared element by element |
+| Verified | the large majority, each with a test or script reference |
+| Genuine gap | **G1 (Low):** no free-disk-space check before upload — **closed in section J** |
+| Partial (Low) | P1 no tens-of-MiB benchmark fixture (benchmarks cap at 4 MiB per file); P2 no seconds/MiB figure; P3 cache state not a recorded field; P4 total on-disk footprint shown as components, not as one ratio — **P2–P4 closed, P1 documented, in section J** |
+| Acceptable deviations | no CLI (report says CLI **or** HTTP); capacity model is storage/growth, not a queue/latency simulator (optional in the report); delete reclaims unreferenced chunk files immediately after the commit instead of through a later GC pass |
+| Naming/layout | three column names (`filename`, `original_size`, `chunk_index`), endpoint paths, `chunks/ab/<hash>` vs the diagram's `chunks/ab/cd/<hash>`, no log files (operations table instead) |
+| Out of scope in both reports | authentication, replication, load balancing, sharded index, object store, HA, concurrent writers: not implemented and not claimed |
+
+The correctness criteria that the Feasibility Report makes conditions of its GO decision (deterministic chunking, byte-perfect reconstruction, safe reference handling, transparent benchmark reporting) are all met with test evidence. The only code added for this alignment is `backend/tests/test_report_acceptance.py` (3 tests); no working behaviour was changed.
+
+## J. Final acceptance corrections (2026-11-05)
+
+Scope was limited to the five items below. CDC, chunk identity, the SQLite schema and the storage protocol were not changed, and no
+user data or normal storage database was touched (all tests and browser runs used temporary or throw-away stores).
+
+**1. Upload free-space preflight (G1).**
+- Advisory check after the upload is staged and before any chunk is published, on the filesystem holding the chunk store
+  (smaller of the chunks and staging directories if they are on different volumes).
+- Worst case = every chunk new (`size`) + margin (reserve `CHUNKVAULT_FREE_SPACE_RESERVE_BYTES`, default 16 MiB; one maximum-size
+  chunk in flight; ~512 B SQLite growth per possible chunk). If free space covers that, nothing else happens (no extra work).
+  If not, the staged file is chunked read-only to count the bytes that are really new, so duplicates and mostly-duplicate uploads
+  are not refused. Insufficient space gives `507 insufficient_storage`; staging is removed and nothing is published.
+- Skipped when the OS cannot report free space. Advisory only: it cannot prevent another process from filling the disk.
+- Disk-full errors that still occur (staging the upload, staging or publishing a chunk, SQLite writes) are recognised through the
+  error chain (`ENOSPC`, `EDQUOT`, Windows disk-full codes, SQLite "database or disk is full") and reported as
+  `insufficient_storage` after the normal cleanup. One pre-existing leak was fixed on the way: a staged chunk whose publication
+  failed was left in staging until reconciliation; it is now discarded immediately.
+- Evidence: `backend/tests/test_upload_free_space.py`, 23 tests: insufficient space; duplicate and mostly-duplicate content under
+  tight space; no extra work when space is comfortable; skip when unreadable; disk-full during staging, chunk staging, chunk
+  publication and the final SQLite transaction, each checked for cleanup (no staging or chunk files left), `failed` file and
+  operation, no manifest rows, ref-count view clean, audit healthy, existing files still restorable and a retry succeeding;
+  `507` through the HTTP API without path leakage; configuration validation.
+
+**2. Benchmark reporting (new runs only).**
+- Seconds per MiB for every measured upload and restore, summarised across iterations, and for CDC vs fixed-size processing time.
+- Aggregate on-disk footprint for pipeline benchmarks: footprint = SQLite file (after a full checkpoint) + sizes of all chunk
+  files; ratio = logical bytes ÷ footprint; savings % = 100 × (logical − footprint) ÷ logical (negative when overhead exceeds the
+  reuse). Filesystem block rounding, `-wal`/`-shm` and the empty staging directory are excluded. The payload-only dedup ratio is still
+  reported separately.
+- Cache state recorded as `unknown` in every new result, with a note; the earlier unmeasured claim that the first iteration "may
+  include cold caches" was removed from the methodology.
+- The 4 MiB per-file benchmark limit is unchanged (the pure-Python chunker runs at a few MiB/s; a larger bounded benchmark would
+  need the job limits redesigned). Results saved earlier were not modified, back-filled or reinterpreted: the API serves them
+  unchanged and the UI says "not recorded in this saved result".
+- Live check on a throw-away store: a benchmark started from the UI saved seconds/MiB (0.511 s/MiB upload), a footprint ratio of
+  1.28 and cache state `unknown`, matching the API; the older saved result in that store showed "not recorded" for all three.
+- Evidence: `backend/tests/test_benchmark_reporting.py` (20 tests: formulas, degenerate inputs, reciprocal of throughput,
+  footprint built from measured components, aggregation across iterations, comparison timing, cache declaration, old results
+  served unchanged) and `frontend/src/test/reporting.test.jsx` (6 tests).
+
+**3. Documentation.** The traceability matrix now uses the statuses Implemented / Partially implemented / Documented limitation /
+Not applicable, states that the original academic reports were reviewed but are not stored in the public repository, and records
+what was resolved. `docs/api/planned-contracts.md` and `.env.example` document `507` and the reserve setting.
+
+**4. Test history (kept, not overwritten).**
+
+| Point in time | Backend | Frontend | Phase 2 script | Phase 6 script | Build |
+|---|---|---|---|---|---|
+| Phase 6 final run (2026-11-04) — section B | 401 | 128 | 27/27 | 74/74 | ok |
+| Phase 6.1 (docs-link test, reconciliation fix) | 402 | 130 | 27/27 | 74/74 | ok |
+| Phase 7 (redesign, committed `90075a7`) | 402 | 161 | 27/27 | 74/74 | ok |
+| Report alignment (uncommitted) | 405 | 161 | 27/27 | 74/74 | ok |
+| **Final acceptance corrections (2026-11-05)** | **448** | **167** | **27/27** | **74/74** | **ok** (main bundle 225.87 kB, gzip 72.63 kB) |
+
+**5. Remaining limitations.** No tens-of-MiB benchmark; footprint ratio for pipeline benchmarks only; free-space check is advisory;
+cache state is declared unknown rather than controlled; no authentication; pure-Python chunker; power-loss durability untested;
+no automated browser test suite (browser checks are manual, and the screenshot tool could not capture this run because the pane
+was not displayed, so the UI figures were verified from the DOM and API).

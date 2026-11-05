@@ -30,6 +30,14 @@ class UploadTooLargeError(UploadError):
     status_code = 413
 
 
+class InsufficientStorageError(UploadError):
+    """Not enough free space on the chunk store's volume (advisory preflight) or the volume filled up mid-upload.
+    Nothing from the upload is kept: staging is removed, chunks it created are un-published and the file is 'failed'."""
+
+    code = "insufficient_storage"
+    status_code = 507
+
+
 class ChunkIdentityConflictError(UploadError):
     """Same SHA-256 but different size. Treated as corruption, never as a duplicate."""
 

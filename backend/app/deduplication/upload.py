@@ -12,6 +12,11 @@ Order of effects (SQLite and the filesystem cannot share a transaction):
     manifest (triggers maintain ref_count), set file 'complete' + sha256, finish operation
  7. remove the staged upload
 
+Free space: after staging, and before any chunk is published, ``_check_free_space`` compares the free space on the
+chunk store's volume with the bytes this upload could add. It is advisory (another process can still fill the disk),
+so ENOSPC / "disk is full" failures at any later step are also translated to ``insufficient_storage`` after the normal
+cleanup below.
+
 Any ``Exception`` before the T2 commit leaves the file 'failed', the operation
 'failed', removes staged files and un-publishes chunks this upload created that
 no metadata references. A ``BaseException`` (modelling a process crash) is not
@@ -31,6 +36,7 @@ from typing import BinaryIO
 
 from app.chunking.interfaces import Chunker
 from app.core.config import Settings
+from app.core.diskfull import is_disk_full
 from app.core.errors import ChunkVaultError
 from app.core.locking import WriterLock
 from app.database.connection import connect, transaction
@@ -42,6 +48,7 @@ from app.deduplication.interfaces import (
     ChunkIdentityConflictError,
     DeduplicationManager,
     EmptyFilenameError,
+    InsufficientStorageError,
     UploadError,
     UploadResult,
     UploadTooLargeError,
@@ -50,6 +57,8 @@ from app.hashing.sha256 import Sha256Service
 from app.storage.filesystem import FilesystemChunkStore
 
 _COPY_BLOCK = 1024 * 1024
+# Rough SQLite growth per chunk (chunk row + manifest row + index entries), used only for the advisory margin.
+_METADATA_BYTES_PER_CHUNK = 512
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -105,6 +114,7 @@ class Uploader:
         try:
             size, whole_sha = self._stage_upload(stream, part)
             self.checkpoint("staged")
+            self._check_free_space(conn, part, size)
             with transaction(conn):  # T1
                 self._repo.create_file(conn, file_id, name, size)
                 file_row_created = True
@@ -135,7 +145,12 @@ class Uploader:
                             to_register.append((h, chunk.size))
                             if decision is ChunkDecision.NEW:
                                 staged = self._store.stage(h, chunk.data)
-                                if self._store.publish(staged):
+                                try:
+                                    created = self._store.publish(staged)
+                                except Exception:
+                                    self._store.discard(staged)  # e.g. disk full: do not leave the temp file in staging
+                                    raise
+                                if created:
                                     published.append(h)
                                 self.checkpoint("chunk_published")
                                 bytes_written += chunk.size
@@ -165,7 +180,14 @@ class Uploader:
             return UploadResult(file_id, name, size, whole_sha, len(manifest),
                                 new_chunks, duplicate_chunks, bytes_written, tuple(outcomes))
         except Exception as exc:
+            disk_full = is_disk_full(exc)
             self._cleanup_failure(conn, file_id, file_row_created, op_id, published, exc)
+            if isinstance(exc, InsufficientStorageError):
+                raise
+            if disk_full:
+                raise InsufficientStorageError(
+                    "the storage volume ran out of space during the upload; nothing from it was kept"
+                ) from exc
             if isinstance(exc, ChunkVaultError):
                 raise
             raise UploadError("upload failed and was rolled back") from exc
@@ -174,6 +196,53 @@ class Uploader:
                 conn.close()
             except sqlite3.Error:
                 pass
+
+    def _margin(self, size: int) -> int:
+        """Extra bytes to keep free on top of the chunk bytes: the configured reserve, one chunk in flight in
+        staging (a staged chunk is renamed into place, not copied), and SQLite growth for the worst-case chunk count."""
+        cdc = self._s.cdc
+        max_chunks = size // cdc.min_chunk_size + 1
+        return self._s.free_space_reserve_bytes + cdc.max_chunk_size + max_chunks * _METADATA_BYTES_PER_CHUNK
+
+    def _check_free_space(self, conn, part: Path, size: int) -> None:
+        """Advisory protection, not a guarantee: refuse an upload that clearly cannot fit, before publishing anything.
+
+        The staged copy already exists, so the worst case is that every chunk is new and adds ``size`` more bytes.
+        If the free space on the chunk store's volume covers that plus the margin, the upload proceeds with no further
+        work. Only when it does not is the staged file chunked (read-only) to count the bytes that are *really* new, so
+        a duplicate upload that needs little or nothing is never refused. The check is skipped if the OS cannot report
+        free space. Disk-full errors that still happen later are handled separately (see ``_upload_locked``).
+        """
+        if size == 0:
+            return
+        free = self._store.free_bytes()
+        if free is None:
+            return
+        margin = self._margin(size)
+        if free >= size + margin:
+            return
+        needed = self._new_bytes_needed(conn, part) + margin
+        if free < needed:
+            raise InsufficientStorageError(
+                f"not enough free space on the storage volume: about {needed} bytes are needed, {free} are free",
+                details={"required_bytes": needed, "free_bytes": free, "advisory": True},
+            )
+
+    def _new_bytes_needed(self, conn, part: Path) -> int:
+        """Bytes of distinct chunks in the staged file that are not already stored (read-only dry run).
+        Anything that is not a verified-present 'stored' row is counted, so the estimate errs on the side of caution."""
+        seen: set[str] = set()
+        total = 0
+        with open(part, "rb") as src:
+            for chunk in self._chunker.chunk_stream(src):
+                h = self._hasher.digest(chunk.data)
+                if h in seen:
+                    continue
+                seen.add(h)
+                row = self._repo.get_chunk(conn, h)
+                if row is None or row.state is not ChunkState.STORED:
+                    total += chunk.size
+        return total
 
     def _stage_upload(self, stream: BinaryIO, part: Path) -> tuple[int, str]:
         hasher = self._hasher.new_hasher()

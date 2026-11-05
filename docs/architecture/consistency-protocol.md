@@ -56,3 +56,9 @@ Single process, sequential processing. Upload, delete and reconcile each run und
 ## Durability assumptions
 
 Chunk bytes are `fsync`ed before the atomic rename; metadata commits use `synchronous=FULL`. On POSIX the chunk directory is also `fsync`ed after the rename; Windows has no directory fsync, so a power loss right after a rename may lose the chunk file, surfacing later as a *missing chunk* in the audit, never as silent corruption. Staging and chunk directories must be on one filesystem (checked at startup). Nothing here protects against disk failure or bit rot beyond detection.
+
+## Free space and disk-full failures
+
+Before any chunk is published, the upload checks (advisory only) that the chunk store's volume has room for the worst case: every chunk new, plus a margin (`CHUNKVAULT_FREE_SPACE_RESERVE_BYTES`, one maximum-size chunk in flight, and an allowance for SQLite growth). If that does not fit, the staged file is chunked read-only to count the bytes that are really new, so a duplicate upload that needs little or no space is not refused. Insufficient space gives `507 insufficient_storage` with staging removed and nothing published.
+
+The check cannot stop another process from filling the disk, so disk-full errors at any later step (staging, chunk staging or publication, SQLite writes) are recognised and reported as `insufficient_storage` after the normal cleanup: staging removed, chunks this upload created un-published, the file and operation marked `failed`, the final transaction rolled back as one unit. The protocol itself (stage, fsync, atomic rename, one metadata commit) is unchanged.

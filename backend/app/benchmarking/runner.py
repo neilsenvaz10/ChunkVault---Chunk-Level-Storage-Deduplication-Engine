@@ -32,6 +32,40 @@ from app.storage.stats import compute_stats
 
 Progress = Callable[[str, int, int, str], None]
 
+MIB_BYTES = 1024 * 1024
+
+FOOTPRINT_DEFINITION = (
+    "On-disk footprint ratio = logical bytes / footprint bytes, where logical bytes is the total size of every uploaded file and "
+    "footprint bytes is the SQLite database file (measured after a full checkpoint, so it includes the empty schema and all "
+    "indexes) plus the sizes of all stored chunk files. Filesystem block rounding, the SQLite -wal/-shm files and the (empty) "
+    "staging directory are not counted. Footprint savings % = 100 x (logical - footprint) / logical; it is negative when "
+    "metadata overhead exceeds what chunk reuse saved. The payload-only figures (dedup ratio, savings %) are reported separately."
+)
+
+# Recorded with every new result. The OS file cache is not controlled or measured, so it is "unknown", never guessed.
+CONDITIONS = {
+    "cache_state": "unknown",
+    "cache_note": "The OS file cache was not flushed, inspected or controlled; runs are not described as cold or warm.",
+}
+
+
+def seconds_per_mib(nbytes: int | float, seconds: float) -> float | None:
+    """Seconds needed per MiB for one measured operation; None when it cannot be computed (no bytes or no time)."""
+    if not nbytes or nbytes <= 0 or seconds is None or seconds <= 0:
+        return None
+    return seconds / (nbytes / MIB_BYTES)
+
+
+def footprint_figures(logical_bytes: int, chunk_store_bytes: int, database_bytes: int) -> dict:
+    """Aggregate on-disk footprint from the measured components (see FOOTPRINT_DEFINITION)."""
+    footprint = chunk_store_bytes + database_bytes
+    return {
+        "footprint_bytes": footprint,
+        "footprint_ratio": (logical_bytes / footprint) if footprint > 0 else None,
+        "footprint_savings_percent": (100.0 * (logical_bytes - footprint) / logical_bytes) if logical_bytes > 0 else None,
+    }
+
+
 METHODOLOGY = [
     "Every pipeline benchmark runs the real upload and restore code on a private temporary store; the application's data is never used.",
     "Datasets are generated from a seed (random.Random(seed)), so the same workload, size and seed give byte-identical input every time.",
@@ -39,8 +73,10 @@ METHODOLOGY = [
     "Stage timings are exclusive: when one stage runs inside another (for example the SHA-256 re-hash inside the chunk store's verify), the outer stage is paused, so stages never overlap and sum to at most the wall-clock time. 'other' is the remainder (Python glue, locking, the output file write).",
     "Stage definitions - upload_staging: receiving the upload into a staged file and fsync; cdc: the Rabin chunker including reading the staged file; sha256_identity: hashing each chunk for its identity; dedup_read: reading existing chunks from disk to verify them before reuse; sha256_verify: re-hashing during that check and during staging; chunk_persistence: writing, fsync and atomic publication of new chunks; metadata: SQLite connection, repository calls, BEGIN and COMMIT.",
     "Restore stages - chunk_read: reading chunk files; sha256_verify: per-chunk verification; metadata: SQLite; other: the output write and the whole-file hash.",
-    "Each iteration uses a fresh store with identical input, so the spread between iterations shows measurement noise, not different work. The first iteration may include cold caches.",
-    "Throughput is bytes / seconds for the whole operation. The chunker is pure Python, so absolute numbers are specific to this machine and implementation.",
+    "Each iteration uses a fresh store with identical input, so the spread between iterations shows measurement noise, not different work.",
+    "Cache state is unknown: the operating-system file cache was neither flushed nor inspected, so no run is described as cold or warm. Data written during a run is likely to be cached, and the first iteration may differ from later ones.",
+    "Throughput is bytes / seconds for the whole operation; seconds per MiB is seconds / (bytes / 2^20) for the same operation and the same bytes. The chunker is pure Python, so absolute numbers are specific to this machine and implementation.",
+    FOOTPRINT_DEFINITION,
     "Database overhead is the growth of the SQLite file (after a full checkpoint) over the freshly initialised schema; it is page-granular and includes all tables and indexes.",
 ]
 
@@ -192,6 +228,7 @@ def run_pipeline_iteration(spec: BenchmarkSpec, cdc: CDCConfig, iteration: int) 
             uploads.append({
                 "name": name, "size_bytes": len(data), "total_seconds": total,
                 "throughput_mib_s": (len(data) / MIB) / total if total > 0 else None,
+                "seconds_per_mib": seconds_per_mib(len(data), total),
                 "stages_seconds": stages, "stages_percent": pct, "chunk_count": res.chunk_count,
                 "new_chunks": res.new_chunks, "reused_chunks": res.duplicate_chunks, "bytes_written": res.bytes_written,
                 "sha256_matches_source": res.sha256 == stored[-1][3]})
@@ -209,6 +246,7 @@ def run_pipeline_iteration(spec: BenchmarkSpec, cdc: CDCConfig, iteration: int) 
             dest.unlink(missing_ok=True)
             restores.append({"name": name, "size_bytes": result.size, "total_seconds": total,
                              "throughput_mib_s": (result.size / MIB) / total if total > 0 else None,
+                             "seconds_per_mib": seconds_per_mib(result.size, total),
                              "stages_seconds": stages, "stages_percent": pct, "integrity_verified": ok})
 
         stats = compute_stats(settings, svc.store)
@@ -228,7 +266,8 @@ def run_pipeline_iteration(spec: BenchmarkSpec, cdc: CDCConfig, iteration: int) 
             "database_bytes": db_total, "database_overhead_bytes": max(0, db_total - baseline_db),
             "manifest_rows": manifest_rows,
             "overhead_bytes_per_manifest_row": (max(0, db_total - baseline_db) / manifest_rows) if manifest_rows else None,
-            "chunk_files": stats.chunk_files, "chunk_store_bytes": stats.chunk_store_bytes}
+            "chunk_files": stats.chunk_files, "chunk_store_bytes": stats.chunk_store_bytes,
+            **footprint_figures(stats.logical_bytes, stats.chunk_store_bytes, db_total)}
         return {"iteration": iteration, "uploads": uploads, "restores": restores, "storage": storage}
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -246,10 +285,14 @@ def summarize_pipeline(iterations: list[dict]) -> dict:
     return {
         "upload_total_seconds": summarize(up_total),
         "upload_throughput_mib_s": summarize([(b / MIB) / t for b, t in zip(up_bytes, up_total) if t > 0]),
+        "upload_seconds_per_mib": summarize([v for v in (seconds_per_mib(b, t) for b, t in zip(up_bytes, up_total)) if v is not None]),
+        "restore_seconds_per_mib": summarize([v for v in (seconds_per_mib(b, t) for b, t in zip(re_bytes, re_total)) if v is not None]),
         "restore_total_seconds": summarize(re_total),
         "restore_throughput_mib_s": summarize([(b / MIB) / t for b, t in zip(re_bytes, re_total) if t > 0]),
         "dedup_ratio": summarize([v for v in col(lambda it: it["storage"]["dedup_ratio"]) if v is not None]),
         "savings_percent": summarize([v for v in col(lambda it: it["storage"]["savings_percent"]) if v is not None]),
+        "footprint_ratio": summarize([v for v in col(lambda it: it["storage"]["footprint_ratio"]) if v is not None]),
+        "footprint_savings_percent": summarize([v for v in col(lambda it: it["storage"]["footprint_savings_percent"]) if v is not None]),
         "upload_stage_seconds": {s: summarize(col(lambda it, s=s: sum(u["stages_seconds"].get(s, 0.0) for u in it["uploads"])))
                                  for s in stage_names},
         "integrity_all_verified": all(r["integrity_verified"] for it in iterations for r in it["restores"]),
@@ -317,6 +360,8 @@ def run_chunking_comparison(spec: BenchmarkSpec, cdc: CDCConfig, progress: Progr
                 result, elapsed = _scheme_result(case["versions"], fn)
                 times.append(elapsed)
             result["processing_seconds"] = summarize(times)
+            result["processing_seconds_per_mib"] = summarize(
+                [v for v in (seconds_per_mib(result["logical_bytes"], t) for t in times) if v is not None])
             row[scheme] = result
         delta = None
         if row["cdc"]["savings_percent"] is not None and row["fixed"]["savings_percent"] is not None:
@@ -331,4 +376,4 @@ def run_chunking_comparison(spec: BenchmarkSpec, cdc: CDCConfig, progress: Progr
 
 def run_benchmark(spec: BenchmarkSpec, cdc: CDCConfig, progress: Progress) -> dict:
     body = run_pipeline(spec, cdc, progress) if spec.kind == "pipeline" else run_chunking_comparison(spec, cdc, progress)
-    return {**body, "environment": environment(cdc), "methodology": METHODOLOGY}
+    return {**body, "environment": environment(cdc), "conditions": CONDITIONS, "methodology": METHODOLOGY}

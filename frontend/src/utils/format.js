@@ -33,6 +33,9 @@ export const formatSeconds = (s) => {
   return `${s.toFixed(2)} s`
 }
 
+// seconds per MiB: the reciprocal view of throughput (small numbers are easier to read than tiny rates)
+export const formatSecPerMiB = (v) => (v === null || v === undefined ? '—' : `${v.toFixed(v >= 10 ? 1 : v >= 1 ? 2 : 3)} s/MiB`)
+
 export const formatRate = (v) => (v === null || v === undefined ? '—' : `${v.toFixed(v >= 10 ? 1 : 2)} MiB/s`)
 
 // Compact number for large model outputs (1.2e9 -> 1.20 G)

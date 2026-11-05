@@ -306,10 +306,11 @@ describe('trade-offs page (phase 7)', () => {
 })
 
 describe('documentation reader (phase 7)', () => {
-  it('states truthfully that the original reports are not in the repository', async () => {
+  it('says the original reports are not stored in the repository and points to the recorded review', async () => {
     renderApp('/docs')
-    const note = await screen.findByText('Original report alignment: not established')
-    expect(note.closest('.notice')).toHaveTextContent('not in the repository')
+    const note = await screen.findByText('Original reports are not stored in the repository')
+    expect(note.closest('.notice')).toHaveTextContent('docs/references/ is empty')
+    expect(within(note.closest('.notice')).getByRole('button', { name: 'requirements traceability matrix' })).toBeInTheDocument()
   })
 
   it('lists the verification documents and opens one from the navigation', async () => {

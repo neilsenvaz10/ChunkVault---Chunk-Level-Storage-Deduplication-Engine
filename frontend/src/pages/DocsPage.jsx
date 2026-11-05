@@ -123,9 +123,9 @@ export default function DocsPage() {
       </nav>
       <div className="docs-body">
       {REFERENCES.length === 0 ? (
-        <Notice tone="warn" title="Original report alignment: not established">
-          The original System Design Report and Feasibility Report are not in the repository (<code>docs/references/</code> is empty),
-          so ChunkVault has not been checked against them. See the{' '}
+        <Notice tone="info" title="Original reports are not stored in the repository">
+          <code>docs/references/</code> is empty. The System Design Report and Feasibility Report were reviewed separately; the result,
+          including every deviation, is in the{' '}
           <button className="link-btn" onClick={() => setCurrent('verification/requirements-traceability.md')}>requirements traceability matrix</button>.
         </Notice>
       ) : (
