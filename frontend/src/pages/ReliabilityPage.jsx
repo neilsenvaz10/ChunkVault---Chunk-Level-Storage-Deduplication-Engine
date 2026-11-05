@@ -31,7 +31,15 @@ export const FINDING_INFO = {
 }
 
 // Recovery dashboard: detection results (from the read-only audit) and, separately, what a repair did.
-export function RecoveryDashboard({ report, actions }) {
+// The status hint must say whether storage was modified: a read-only audit never changes anything, a
+// reconciliation does (and its counts come from the audit the server runs right after repairing).
+export function statusHint(source, actions) {
+  if (source !== 'reconcile') return 'read-only audit; nothing was changed'
+  if (!actions) return 'reconciliation ran and changed nothing; counts are from the audit run right after it'
+  return `reconciliation modified storage (${actions} action${actions === 1 ? '' : 's'}); counts are from the audit run right after the repair`
+}
+
+export function RecoveryDashboard({ report, actions, source = 'audit' }) {
   const k = report?.counts_by_kind || {}
   const n = (...names) => names.reduce((t, x) => t + (k[x] || 0), 0)
   const v = (x) => (report ? formatInt(x) : '—')
@@ -44,7 +52,7 @@ export function RecoveryDashboard({ report, actions }) {
       <MetricTile label="Reference-count mismatches" value={v(n('ref_count_mismatch'))} tone={n('ref_count_mismatch') ? 'bad' : undefined} />
       <MetricTile label="Orphaned chunks" value={v(n('orphan_chunk_file', 'unreferenced_chunk'))} />
       <MetricTile label="Recovery actions" value={actions === null || actions === undefined ? 'none run' : formatInt(actions)} hint="from the last explicit reconciliation" />
-      <MetricTile label="Verification status" value={!report ? 'not audited' : report.healthy ? 'healthy' : 'findings'} tone={!report ? undefined : report.healthy ? 'good' : 'bad'} hint="detection only; nothing was changed" />
+      <MetricTile label="Verification status" value={!report ? 'not audited' : report.healthy ? 'healthy' : 'findings'} tone={!report ? undefined : report.healthy ? 'good' : 'bad'} hint={statusHint(source, actions)} />
     </div>
   )
 }
@@ -106,7 +114,7 @@ export default function ReliabilityPage() {
     try {
       const result = await api.reconcile()
       setRec({ status: 'done', result, error: null })
-      setAudit({ status: 'done', report: result.remaining, error: null })
+      setAudit({ status: 'done', report: result.remaining, error: null, source: 'reconcile' })
     } catch (e) {
       setRec({ status: 'failed', result: null, error: e })
     } finally {
@@ -121,11 +129,12 @@ export default function ReliabilityPage() {
   return (
     <>
       <Card title="Recovery dashboard" aside={<StatusBadge tone="ok">detection and repair are separate</StatusBadge>}>
-        <RecoveryDashboard report={audit.report} actions={rec.result ? rec.result.actions.length : null} />
+        <RecoveryDashboard report={audit.report} actions={rec.result ? rec.result.actions.length : null} source={audit.source} />
         {!audit.report && <p className="empty">Run the read-only audit below to fill this in; nothing is shown until it has actually been run.</p>}
       </Card>
 
-      <Card title="Read-only integrity audit" aside={<StatusBadge tone="ok">changes nothing</StatusBadge>}>
+      <Card title="Read-only integrity audit" className="panel-audit" aside={<StatusBadge tone="ok">changes nothing</StatusBadge>}>
+        <span className="panel-label">Inspect · read-only</span>
         <p>
           The audit re-hashes every stored chunk, checks every manifest and reference count, and looks for crash leftovers.
           It never modifies the database or the chunk store. Large stores take longer because every chunk is re-read.
@@ -137,7 +146,8 @@ export default function ReliabilityPage() {
         {audit.report && <Findings report={audit.report} />}
       </Card>
 
-      <Card title="Reconciliation (explicit repair)">
+      <Card title="Reconciliation (explicit repair)" className="panel-repair" aside={<StatusBadge tone="warn">modifies storage after confirmation</StatusBadge>}>
+        <span className="panel-label">Repair · needs your confirmation</span>
         <p>
           Reconciliation cleans up what a crash can leave behind: stale staging files, orphan chunk files, unreferenced chunk
           records, files stuck in &ldquo;uploading&rdquo; and operations stuck in &ldquo;running&rdquo;. It never deletes a chunk that any
@@ -157,6 +167,7 @@ export default function ReliabilityPage() {
             <ul className="plain">
               {rec.result.actions.map((a, i) => <li key={i}><code>{a.action}</code> {a.subject.slice(0, 20)} — {a.detail}</li>)}
             </ul>
+            {rec.result.actions.length === 0 && <span>No changes were required: storage was not modified.</span>}
             <span>The audit above was refreshed with what remains.</span>
           </div>
         )}

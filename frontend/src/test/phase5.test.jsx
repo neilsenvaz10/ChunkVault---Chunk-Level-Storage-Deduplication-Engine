@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Chart from '../components/Chart'
-import { RecoveryDashboard } from '../pages/ReliabilityPage'
+import { RecoveryDashboard, statusHint } from '../pages/ReliabilityPage'
 import { toRequest, DEFAULTS } from '../pages/SimulationPage'
 import { api } from '../services/api'
 import { formatCompact, formatSeconds } from '../utils/format'
@@ -252,8 +252,42 @@ describe('recovery dashboard', () => {
     expect(dash).toHaveTextContent('Reference-count mismatches4')
     expect(dash).toHaveTextContent('Orphaned chunks3')
     expect(dash).toHaveTextContent('Verification statusfindings')
-    expect(dash).toHaveTextContent('detection only; nothing was changed')
+    expect(dash).toHaveTextContent('read-only audit; nothing was changed')
     expect(api.reconcile).not.toHaveBeenCalled()
+  })
+
+  it('says storage was modified only after a reconciliation that acted, never for a read-only audit', async () => {
+    const user = userEvent.setup()
+    api.audit.mockResolvedValue(fx.damagedAudit)
+    api.reconcile.mockResolvedValue({
+      actions: [{ action: 'delete_staging_file', subject: 'upload-1.part', detail: 'removed leftover staging file' }],
+      remaining: { ...fx.damagedAudit, findings: [], healthy: true, counts_by_kind: {} },
+    })
+    renderApp('/reliability')
+    await user.click(await screen.findByRole('button', { name: 'Run integrity audit' }))
+    const dash = screen.getByRole('group', { name: 'Recovery dashboard' })
+    await waitFor(() => expect(dash).toHaveTextContent('read-only audit; nothing was changed'))
+    expect(dash).not.toHaveTextContent('modified storage')
+
+    await user.click(await screen.findByRole('button', { name: /Review and reconcile/ }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Run reconciliation' }))
+    await waitFor(() => expect(dash).toHaveTextContent('reconciliation modified storage (1 action)'))
+    expect(dash).not.toHaveTextContent('nothing was changed')
+    expect(dash).toHaveTextContent('Recovery actions1')
+
+    // a fresh read-only audit afterwards is a read-only audit again
+    await user.click(screen.getByRole('button', { name: 'Run integrity audit' }))
+    await waitFor(() => expect(dash).toHaveTextContent('read-only audit; nothing was changed'))
+    expect(dash).not.toHaveTextContent('modified storage')
+  })
+
+  it('does not claim a reconciliation changed anything when it performed no actions', () => {
+    expect(statusHint('audit', null)).toBe('read-only audit; nothing was changed')
+    expect(statusHint('audit', 3)).toBe('read-only audit; nothing was changed')
+    expect(statusHint('reconcile', 0)).toMatch(/changed nothing/)
+    expect(statusHint('reconcile', 0)).not.toMatch(/modified storage/)
+    expect(statusHint('reconcile', 1)).toMatch(/modified storage \(1 action\)/)
+    expect(statusHint('reconcile', 4)).toMatch(/modified storage \(4 actions\)/)
   })
 
   it('counts recovery actions only after an explicit reconciliation', () => {

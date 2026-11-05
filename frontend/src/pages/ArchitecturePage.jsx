@@ -48,10 +48,14 @@ export default function ArchitecturePage() {
             Select a component; its dependencies are highlighted.
           </p>
           <LayerLegend />
-          <DiagramViewport minWidth={640} label="Component diagram">
-            <ComponentDiagram selectedId={selectedId} onSelect={setSelectedId} />
-          </DiagramViewport>
-          <ComponentDetails component={selected} onSelect={setSelectedId} />
+          <div className="split">
+            <DiagramViewport minWidth={640} label="Component diagram">
+              <ComponentDiagram selectedId={selectedId} onSelect={setSelectedId} />
+            </DiagramViewport>
+            <div className="split-side">
+              <ComponentDetails component={selected} onSelect={setSelectedId} />
+            </div>
+          </div>
         </Card>
       )}
       {tab === 'uploadlife' && <Walkthrough key="up" kind="upload" stages={UPLOAD_STAGES} />}

@@ -110,3 +110,11 @@ def test_no_stale_phase_markers():
             if stale.search(line):
                 offenders.append(f"{path.relative_to(ROOT)}:{n}")
     assert not offenders, offenders
+
+
+def test_every_document_is_reachable_from_the_docs_page():
+    page = (ROOT / "frontend" / "src" / "pages" / "DocsPage.jsx").read_text(encoding="utf-8")
+    listed = set(re.findall(r"'([a-z0-9/_.-]+\.md)'\]", page))
+    present = {p.relative_to(DOCS).as_posix() for p in DOCS.rglob("*.md")}
+    assert present - listed == set(), f"not linked from the Documentation page: {sorted(present - listed)}"
+    assert listed - present == set(), f"linked but missing: {sorted(listed - present)}"

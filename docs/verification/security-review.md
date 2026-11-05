@@ -45,4 +45,4 @@ These are true of the design and must be understood before any use beyond a sing
 
 ## Not done
 
-No penetration test beyond the probes above, no fuzzing campaign, no dependency CVE scan (no network audit was run), and no review of the Vite/npm toolchain.
+No penetration test beyond the probes above and no fuzzing campaign. Frontend dependencies were scanned with `npm audit` in Phase 6.1 (results in the final verification report, section G: 2 moderate and 2 low runtime advisories, none exploitable in this application as used; dev-toolchain advisories only affect a local dev/test server). Python packages were not audited because no audit tool is installed.

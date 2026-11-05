@@ -13,6 +13,8 @@
 > - The matrix below traces only the project's own requirement list, `docs/architecture/requirements.md`,
 >   which was derived from the phase briefs. It is an *interim* traceability matrix, not the requested one.
 >
+> **Phase 6.1 re-check (2026-11-04):** the repository was searched again (including `docs/references/` and any `.pdf`/`.docx` files); the reports are still absent, so the status remains **BLOCKED**.
+>
 > **To unblock:** add the two reports (for example under `docs/references/`) and re-run this step. Each
 > requirement they contain needs a row: requirement → component → test/script → status.
 

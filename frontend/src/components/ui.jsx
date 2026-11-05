@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { shortHash } from '../utils/format'
 
 export function StatusBadge({ tone = 'muted', children }) {
@@ -46,6 +46,38 @@ export function Spinner({ label = 'Loading…' }) {
   return <p className="muted" role="status">{label}</p>
 }
 
+// Consistent empty state: what is missing and what the reader can do about it.
+export function EmptyState({ title, children, action }) {
+  return (
+    <div className="empty-state">
+      {title && <strong>{title}</strong>}
+      {children && <p className="muted">{children}</p>}
+      {action}
+    </div>
+  )
+}
+
+// Inline message. role="alert" only for errors so screen readers announce failures, not routine information.
+export function Notice({ tone = 'info', title, children }) {
+  return (
+    <div className={`notice notice-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
+      {title && <strong>{title}</strong>}
+      <div>{children}</div>
+    </div>
+  )
+}
+
+// Says where a number comes from, so measured data, model output and reference text are never mixed up.
+const SOURCES = {
+  measured: ['Measured on this machine', 'chip-measured'],
+  model: ['Mathematical model', 'chip-model'],
+  reference: ['Reference', 'chip-reference'],
+}
+export function SourceChip({ kind }) {
+  const [label, cls] = SOURCES[kind] || SOURCES.reference
+  return <span className={`source-chip ${cls}`}>{label}</span>
+}
+
 // Wraps the three states every data view needs. `isEmpty(data)` decides the empty state.
 export function AsyncState({ state, onRetry, isEmpty, empty, children }) {
   const { data, error, loading } = state
@@ -84,7 +116,7 @@ export function Hash({ value, length = 12 }) {
   return (
     <span className="hash" title={value}>
       <code>{shortHash(value, length)}</code>
-      <button className="link-btn" onClick={copy} aria-label={`Copy ${value}`}>
+      <button className="link-btn" onClick={copy} aria-label={`Copy ${value}`} title="Copy full value">
         {copied ? 'copied' : 'copy'}
       </button>
     </span>
@@ -105,20 +137,41 @@ export function Pagination({ total, limit, offset, onChange }) {
   )
 }
 
+const FOCUSABLE = 'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+// Modal confirmation. Focus moves into the dialog (to Cancel, so a stray Enter never confirms a destructive action),
+// Tab is kept inside it, Escape cancels, and focus returns to the control that opened it.
 export function ConfirmDialog({ title, children, confirmLabel = 'Confirm', danger, busy, onConfirm, onCancel }) {
+  const ref = useRef(null)
+  const cancelRef = useRef(null)
+  const titleId = useId()
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onCancel()
+    const opener = document.activeElement
+    cancelRef.current?.focus()
+    const onKey = (e) => {
+      if (e.key === 'Escape') { onCancel(); return }
+      if (e.key !== 'Tab' || !ref.current) return
+      const items = [...ref.current.querySelectorAll(FOCUSABLE)]
+      if (!items.length) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus()
+    }
   }, [onCancel])
   return (
     <div className="overlay">
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
-        <h2>{title}</h2>
+      <div className={`dialog ${danger ? 'danger-dialog' : ''}`} ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <h2 id={titleId}>{title}</h2>
         <div className="dialog-body">{children}</div>
         <div className="dialog-actions">
-          <button onClick={onCancel} disabled={busy}>Cancel</button>
-          <button className={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy}>
+          <button ref={cancelRef} onClick={onCancel} disabled={busy}>Cancel</button>
+          <button className={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy} aria-busy={busy || undefined}>
             {busy ? 'Working…' : confirmLabel}
           </button>
         </div>

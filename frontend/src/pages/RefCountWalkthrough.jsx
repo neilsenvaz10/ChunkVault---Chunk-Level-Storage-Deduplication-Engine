@@ -48,25 +48,34 @@ export default function RefCountWalkthrough() {
         <button className="primary" onClick={() => setI((n) => Math.min(STEPS.length - 1, n + 1))} disabled={i === STEPS.length - 1}>Next</button>
         <button onClick={() => setI(0)} disabled={i === 0}>Reset</button>
       </div>
+      <ol className="stages" aria-label="Progress through the steps (use Previous and Next)">
+        {STEPS.map((st, n) => (
+          <li key={st.title}>
+            <span className={`step-pill ${n === i ? 'active' : ''} ${n < i ? 'done' : ''}`} aria-current={n === i ? 'step' : undefined}>
+              <span className="stage-no" aria-hidden="true">{n + 1}</span>{st.title}
+            </span>
+          </li>
+        ))}
+      </ol>
       <div className="details" aria-live="polite">
         <h3>{i + 1}. {s.title}</h3>
         <p>{s.text}</p>
         <div className="two-col">
-          <table aria-label="Illustrative manifests">
+          <div className="table-wrap"><table aria-label="Illustrative manifests">
             <thead><tr><th>File</th><th>Manifest (chunk ids)</th></tr></thead>
             <tbody>
               <tr><td>A</td><td>{s.a.length ? s.a.join(', ') : <span className="muted">deleted</span>}</td></tr>
               <tr><td>B</td><td>{s.b.length ? s.b.join(', ') : <span className="muted">{i === 0 ? 'not uploaded yet' : 'deleted'}</span>}</td></tr>
             </tbody>
-          </table>
-          <table aria-label="Illustrative reference counts">
+          </table></div>
+          <div className="table-wrap"><table aria-label="Illustrative reference counts">
             <thead><tr><th>Chunk</th><th>ref_count (illustrative)</th><th>Reclaimable?</th></tr></thead>
             <tbody>
               {Object.entries(s.refs).map(([c, n]) => (
                 <tr key={c}><td>{c}</td><td>{n}</td><td>{n === 0 ? 'yes — no manifest references' : 'no'}</td></tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
       <h3>Why triggers, not application code</h3>

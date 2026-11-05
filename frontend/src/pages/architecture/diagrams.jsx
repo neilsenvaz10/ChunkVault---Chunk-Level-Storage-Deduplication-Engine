@@ -40,12 +40,25 @@ export function ComponentDiagram({ selectedId, onSelect }) {
   const uses = new Set(selectedId ? dependenciesOf(selectedId).map((d) => d.id) : [])
   const usedBy = new Set(selectedId ? dependentsOf(selectedId).map((d) => d.id) : [])
   return (
-    <svg viewBox="0 0 860 460" className="diagram" role="group" aria-label="Component diagram">
+    <svg viewBox="0 0 860 560" className="diagram" role="group" aria-label="Component diagram">
       <defs>
         <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z" className="arrowhead" />
         </marker>
       </defs>
+      {/* faint column per layer so the separation between layers is visible without adding any component */}
+      {Object.entries(LAYERS).map(([id, l]) => {
+        const members = COMPONENTS.filter((c) => c.layer === id)
+        if (!members.length) return null
+        const x0 = Math.min(...members.map((c) => c.x)) - 14
+        const x1 = Math.max(...members.map((c) => c.x + c.w)) + 14
+        return (
+          <g key={id} className={`layer-band layer-band-${id}`} aria-hidden="true">
+            <rect x={x0} y="4" width={x1 - x0} height="552" rx="8" />
+            <text x={(x0 + x1) / 2} y="20" textAnchor="middle">{l.label.toUpperCase()}</text>
+          </g>
+        )
+      })}
       {EDGES.map(([a, b]) => {
         const p = center(byId[a])
         const q = center(byId[b])
@@ -87,8 +100,9 @@ export function ComponentDetails({ component, onSelect }) {
   return (
     <div className="details" aria-live="polite">
       <h3>{component.name}</h3>
-      <p><span className={`badge layer-badge layer-${component.layer}`}>{LAYERS[component.layer].label} layer</span> {component.purpose}</p>
-      <dl className="defs">
+      <p><span className={`badge layer-badge layer-${component.layer}`}>{LAYERS[component.layer].label} layer</span></p>
+      <dl className="detail-list">
+        <dt>Purpose</dt><dd>{component.purpose}</dd>
         <dt>Inputs</dt><dd><List items={component.inputs} /></dd>
         <dt>Outputs</dt><dd><List items={component.outputs} /></dd>
         <dt>Depends on</dt><dd>{links(uses)}</dd>

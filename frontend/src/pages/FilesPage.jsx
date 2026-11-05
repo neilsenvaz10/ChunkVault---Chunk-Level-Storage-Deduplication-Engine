@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AsyncState, Card, ConfirmDialog, ErrorNotice, Hash, Pagination, StatusBadge } from '../components/ui'
+import Icon from '../components/Icon'
+import { AsyncState, Card, ConfirmDialog, EmptyState, ErrorNotice, Hash, Pagination, StatusBadge } from '../components/ui'
 import { useUploadHistory } from '../context/UploadHistory'
 import { useApi } from '../hooks/useApi'
 import { api, downloadFile, uploadFile } from '../services/api'
@@ -61,29 +62,52 @@ function UploadCard({ maxBytes, onUploaded }) {
     }
   }
 
+  const clear = () => {
+    if (busy) return
+    setFile(null)
+    setResult(null)
+    setError(null)
+    setPhase('idle')
+    setProgress(null)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
   const pct = progress ? Math.round((progress.loaded / progress.total) * 100) : 0
 
   return (
     <Card title="Upload a file">
       <div
-        className={`dropzone ${dragging ? 'dragging' : ''}`}
+        className={`dropzone ${dragging ? 'dragging' : ''} ${file ? 'has-file' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); choose(e.dataTransfer.files?.[0]) }}
       >
-        <p>Drag a file here, or</p>
-        <label className="file-picker">
-          <input ref={inputRef} type="file" aria-label="Choose file" disabled={busy}
-                 onChange={(e) => choose(e.target.files?.[0])} />
-        </label>
-        {maxBytes && <small className="muted">Server limit: {formatBytes(maxBytes)}</small>}
+        {!file && (
+          <>
+            <Icon name="upload" className="dropzone-icon" />
+            <p className="dropzone-title">Drag and drop a file here</p>
+            <p className="dropzone-hint">or choose one from your computer</p>
+          </>
+        )}
+        <div className="selected-file">
+          {file && (
+            <span>
+              <span className="selected-file-name">{file.name}</span>
+              <span className="muted"> · {formatBytes(file.size)} ({formatInt(file.size)} bytes)</span>
+            </span>
+          )}
+          <span className="row" style={{ margin: 0, justifyContent: file ? 'flex-end' : 'center', width: file ? 'auto' : '100%' }}>
+            <label className="file-picker">
+              <input ref={inputRef} type="file" aria-label="Choose file" disabled={busy}
+                     onChange={(e) => choose(e.target.files?.[0])} />
+              <span className="file-picker-face">{file ? 'Change file' : 'Browse files'}</span>
+            </label>
+            {file && <button className="ghost" onClick={clear} disabled={busy}>Remove</button>}
+          </span>
+        </div>
+        {maxBytes && <p className="dropzone-hint" style={{ marginBottom: 0 }}>Server limit: {formatBytes(maxBytes)}</p>}
       </div>
 
-      {file && (
-        <p className="selected-file">
-          <strong>{file.name}</strong> · {formatBytes(file.size)} ({formatInt(file.size)} bytes)
-        </p>
-      )}
       {tooBig && (
         <div className="notice notice-error" role="alert">
           This file is {formatBytes(file.size)}; the server accepts at most {formatBytes(maxBytes)}.
@@ -181,7 +205,9 @@ function Inventory({ files, reload, offset, setOffset }) {
       {message && <div className="notice notice-ok" role="status">{message}</div>}
       {error && <ErrorNotice error={error} />}
       {files.items.length === 0 ? (
-        <p className="empty">No files stored yet. Upload one above.</p>
+        <EmptyState title="No files stored yet.">
+          Upload one above: ChunkVault will split it into content-defined chunks, hash each with SHA-256 and store every distinct chunk once.
+        </EmptyState>
       ) : (
         <div className="table-wrap">
           <table>
@@ -191,15 +217,15 @@ function Inventory({ files, reload, offset, setOffset }) {
             <tbody>
               {files.items.map((f) => (
                 <tr key={f.file_id}>
-                  <td>{f.filename}</td>
-                  <td><code title={f.file_id}>{f.file_id.slice(0, 8)}…</code></td>
-                  <td>{formatBytes(f.original_size)}</td>
-                  <td>{formatInt(f.chunk_count)}</td>
+                  <td className="cell-name">{f.filename}</td>
+                  <td className="nowrap"><code title={f.file_id}>{f.file_id.slice(0, 8)}…</code></td>
+                  <td className="nowrap">{formatBytes(f.original_size)}</td>
+                  <td className="nowrap">{formatInt(f.chunk_count)}</td>
                   <td><Hash value={f.sha256} /></td>
-                  <td>{formatDate(f.created_at)}</td>
+                  <td className="nowrap">{formatDate(f.created_at)}</td>
                   <td><StatusBadge tone={f.status === 'complete' ? 'ok' : f.status === 'failed' ? 'error' : 'warn'}>{f.status}</StatusBadge></td>
                   <td className="actions">
-                    <Link to={`/files/${f.file_id}`}>Inspect</Link>
+                    <Link className="btn small" to={`/files/${f.file_id}`}>Inspect</Link>
                     <button onClick={() => download(f)} disabled={busyId === f.file_id || f.status !== 'complete'}>Download</button>
                     <button className="danger" onClick={() => setPendingDelete(f)} disabled={busyId === f.file_id}>Delete</button>
                   </td>

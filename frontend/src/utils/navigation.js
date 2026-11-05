@@ -3,42 +3,48 @@
 
 export const MODULES = [
   {
-    path: '/', label: 'Dashboard', implemented: true,
+    path: '/', group: 'Overview', icon: 'dashboard', label: 'Dashboard', implemented: true,
     description: 'Live overview of the storage engine: real totals, deduplication savings and backend health.',
   },
   {
-    path: '/files', label: 'File Storage', implemented: true,
+    path: '/files', group: 'Overview', icon: 'files', label: 'File Storage', implemented: true,
     description: 'Upload, inspect, restore and delete files, and see exactly how each one was divided into chunks.',
   },
   {
-    path: '/architecture', label: 'System Architecture', implemented: true,
+    path: '/architecture', group: 'System Design', icon: 'architecture', label: 'System Architecture', implemented: true,
     description: 'Interactive component, sequence and data-flow diagrams of the upload and restore pipelines.',
   },
   {
-    path: '/database', label: 'Database Explorer', implemented: true,
+    path: '/database', group: 'System Design', icon: 'database', label: 'Database Explorer', implemented: true,
     description: 'Read-only view of the SQLite metadata model: tables, keys, relationships and the reference-count invariant.',
   },
   {
-    path: '/reliability', label: 'Reliability & Consistency', implemented: true,
+    path: '/reliability', group: 'Engineering', icon: 'reliability', label: 'Reliability & Consistency', implemented: true,
     description: 'Read-only integrity audit and explicit reconciliation of crash leftovers.',
   },
   {
-    path: '/performance', label: 'Performance Engineering', implemented: true,
+    path: '/performance', group: 'Engineering', icon: 'performance', label: 'Performance Engineering', implemented: true,
     description: 'Reproducible benchmarks of the real pipeline and a CDC vs fixed-size comparison, with every number measured on this machine.',
   },
   {
-    path: '/simulation', label: 'Capacity Simulation', implemented: true,
+    path: '/simulation', group: 'Engineering', icon: 'simulation', label: 'Capacity Simulation', implemented: true,
     description: 'A mathematical capacity and scalability model driven by your assumptions. It is not a measurement or a load test.',
   },
   {
-    path: '/tradeoffs', label: 'Architecture Trade-offs', implemented: true,
+    path: '/tradeoffs', group: 'System Design', icon: 'tradeoffs', label: 'Architecture Trade-offs', implemented: true,
     description: 'Why ChunkVault chose each design alternative, and what would change at scale.',
   },
   {
-    path: '/docs', label: 'System Design Documentation', implemented: true,
-    description: 'The project documentation (requirements, HLD, LLD, schema, API, consistency, decisions).',
+    path: '/docs', group: 'Resources', icon: 'docs', label: 'System Design Documentation', implemented: true,
+    description: 'The project documentation (requirements, HLD, LLD, schema, API, consistency, decisions, verification and submission documents).',
   },
 ]
 
 export const moduleFor = (pathname) =>
   MODULES.find((m) => (m.path === '/' ? pathname === '/' : pathname === m.path || pathname.startsWith(`${m.path}/`)))
+
+// Sidebar sections, in display order. Routes are unchanged; this only groups them.
+export const NAV_GROUPS = ['Overview', 'System Design', 'Engineering', 'Resources'].map((title) => ({
+  title,
+  items: MODULES.filter((m) => m.group === title),
+}))

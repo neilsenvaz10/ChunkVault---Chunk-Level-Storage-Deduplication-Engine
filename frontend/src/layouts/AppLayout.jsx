@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import Icon from '../components/Icon'
 import { PageHeader, StatusBadge } from '../components/ui'
 import { useHealth } from '../hooks/useApi'
-import { MODULES, moduleFor } from '../utils/navigation'
+import { NAV_GROUPS, moduleFor } from '../utils/navigation'
 
 function readCollapsed() {
   try {
@@ -44,15 +45,24 @@ export default function AppLayout() {
       <a className="skip-link" href="#main-content">Skip to content</a>
       <aside className="sidebar" id="primary-nav">
         <div className="brand">
-          <span className="brand-name">ChunkVault</span>
-          <small>Chunk-level deduplication</small>
+          <span className="brand-mark"><Icon name="logo" size={18} className="" /></span>
+          <span className="brand-text">
+            <span className="brand-name">ChunkVault</span>
+            <small>Chunk-level deduplication</small>
+          </span>
         </div>
         <nav aria-label="Primary">
-          {MODULES.map((m) => (
-            <NavLink key={m.path} to={m.path} end={m.path === '/'} title={m.label}>
-              <span className="nav-label">{m.label}</span>
-              {!m.implemented && <i title={`Planned for phase ${m.phase}`}>P{m.phase}</i>}
-            </NavLink>
+          {NAV_GROUPS.map((g) => (
+            <div className="nav-group" key={g.title}>
+              <div className="nav-group-title" aria-hidden="true">{g.title}</div>
+              {g.items.map((m) => (
+                <NavLink key={m.path} to={m.path} end={m.path === '/'} title={m.label}>
+                  <Icon name={m.icon} />
+                  <span className="nav-label">{m.label}</span>
+                  {!m.implemented && <i title={`Planned for phase ${m.phase}`}>P{m.phase}</i>}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <button className="collapse-btn" onClick={toggle} aria-expanded={!collapsed}
@@ -62,10 +72,21 @@ export default function AppLayout() {
       </aside>
       <div className="main">
         <header className="topbar">
-          <button className="menu-btn" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} aria-controls="primary-nav"
-                  aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}>☰ Menu</button>
-          <span className="muted topbar-note">Single-machine prototype · sequential writes</span>
-          <HealthIndicator />
+          <div className="topbar-left">
+            <button className="menu-btn" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} aria-controls="primary-nav"
+                    aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}>
+              <Icon name="menu" size={16} className="" /> Menu
+            </button>
+            {mod && (
+              <span className="crumbs" aria-label="Current section">
+                <span>{mod.group}</span><span aria-hidden="true">/</span><strong>{mod.label}</strong>
+              </span>
+            )}
+          </div>
+          <div className="topbar-right">
+            <span className="topbar-note">Prototype · single machine · sequential writes</span>
+            <HealthIndicator />
+          </div>
         </header>
         <main className="content" id="main-content" tabIndex={-1}>
           {mod && (
@@ -75,7 +96,9 @@ export default function AppLayout() {
               status={!mod.implemented && <StatusBadge tone="warn">Not implemented · Phase {mod.phase}</StatusBadge>}
             />
           )}
-          <Outlet />
+          <Suspense fallback={<p className="muted" role="status">Loading page…</p>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

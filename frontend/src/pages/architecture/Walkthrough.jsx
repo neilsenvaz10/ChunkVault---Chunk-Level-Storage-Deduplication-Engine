@@ -152,7 +152,7 @@ export default function Walkthrough({ stages, kind }) {
         </ol>
         <div className="details" aria-live="polite">
           <h3>{index + 1}. {stage.title}</h3>
-          <dl className="defs">
+          <dl className="detail-list">
             <dt>Performed by</dt><dd>{stage.component}</dd>
             <dt>What happens</dt><dd>{stage.what}</dd>
             <dt>Why it is necessary</dt><dd>{stage.why}</dd>

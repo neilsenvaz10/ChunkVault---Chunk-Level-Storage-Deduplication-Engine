@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Chart from '../components/Chart'
-import { Card, ErrorNotice, MetricTile, StatusBadge } from '../components/ui'
+import { Card, ErrorNotice, MetricTile, SourceChip, StatusBadge } from '../components/ui'
 import { api } from '../services/api'
 import { formatBytes, formatCompact, formatInt, formatPercent, formatRatio } from '../utils/format'
 
@@ -22,6 +22,13 @@ const FIELDS = [
   ['monthly_growth_percent', 'Storage growth rate', 0, 50, 'any', '% of files per month, compound'],
   ['retention_months', 'Retention period', 0, 120, 1, 'months (0 = keep forever)'],
   ['horizon_months', 'Projection horizon', 1, 120, 1, 'months'],
+]
+
+// Inputs are presented in three groups; the field list above stays the single source of labels, bounds and units.
+const GROUPS = [
+  ['Dataset', 'What is stored', ['file_count', 'avg_file_mib', 'avg_chunks_per_file', 'duplicate_percent']],
+  ['Metadata', 'Estimated database bytes (rough guesses)', ['metadata_bytes_per_file', 'metadata_bytes_per_manifest_row', 'metadata_bytes_per_unique_chunk']],
+  ['Growth', 'How the dataset changes over time', ['monthly_growth_percent', 'retention_months', 'horizon_months']],
 ]
 
 export const toRequest = (f) => ({
@@ -82,6 +89,10 @@ export default function SimulationPage() {
 
   return (
     <>
+      <div className="mode-banner model" role="note">
+        <strong>Mathematical model — not a measurement or load test.</strong>
+        <span className="muted">Every figure below is calculated from the assumptions you enter.</span>
+      </div>
       <Card title="What this is" aside={<StatusBadge tone="warn">mathematical model — not a measurement</StatusBadge>}>
         <p>
           This simulator evaluates formulas for the assumptions you enter. It does <strong>not</strong> run a load test, read your stored data or use benchmark
@@ -90,14 +101,25 @@ export default function SimulationPage() {
       </Card>
 
       <Card title="Assumptions (inputs)">
-        <form className="sim-form" onSubmit={(e) => e.preventDefault()} aria-label="Simulation assumptions">
-          {FIELDS.map(([key, label, min, max, step, unit]) => (
-            <label key={key}>{label}
-              <span className="input-unit">
-                <input type="number" min={min} max={max} step={step} value={form[key]} onChange={set(key)} aria-label={label} />
-                <small className="muted">{unit}</small>
-              </span>
-            </label>
+        <form onSubmit={(e) => e.preventDefault()} aria-label="Simulation assumptions">
+          {GROUPS.map(([title, hint, keys]) => (
+            <fieldset className="fieldset" key={title}>
+              <legend>{title}</legend>
+              <p className="muted" style={{ marginTop: 0 }}>{hint}</p>
+              <div className="sim-form">
+                {keys.map((key) => {
+                  const [, label, min, max, step, unit] = FIELDS.find((f) => f[0] === key)
+                  return (
+                    <label key={key}>{label}
+                      <span className="input-unit">
+                        <input type="number" min={min} max={max} step={step} value={form[key]} onChange={set(key)} aria-label={label} />
+                        <small className="muted">{unit}</small>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </fieldset>
           ))}
           <button type="button" onClick={() => setForm(DEFAULTS)}>Reset to defaults</button>
         </form>
@@ -109,7 +131,7 @@ export default function SimulationPage() {
 
       {d && (
         <>
-          <Card title="Estimated results (model output)" aside={sim.loading ? <span className="muted">updating…</span> : null}>
+          <Card title="Estimated results (model output)" aside={sim.loading ? <span className="muted">updating…</span> : <SourceChip kind="model" />}>
             <div className="tiles">
               <MetricTile label="Total logical storage" value={formatBytes(o.logical_bytes)} />
               <MetricTile label="Estimated physical chunk storage" value={formatBytes(o.physical_chunk_bytes)} />
@@ -130,11 +152,12 @@ export default function SimulationPage() {
             {o.dedup_ratio === null && <p className="notice">At 100% duplicates there are no physical chunks, so the deduplication ratio is undefined (shown as n/a).</p>}
           </Card>
 
-          <Card title="Formulas and assumptions used">
+          <details className="disclosure">
+            <summary>Formulas and assumptions used</summary>
             <ul>{d.formulas.map((f) => <li key={f}><code>{f}</code></li>)}</ul>
             <h3>Assumptions</h3>
             <ul>{d.assumptions.map((a) => <li key={a}>{a}</li>)}</ul>
-          </Card>
+          </details>
 
           <Card title="Scalability charts (all projected from the assumptions)">
             <Chart title="File count vs storage consumption" xLabel="number of files" yLabel="bytes" formatX={formatCompact} formatY={formatBytes}

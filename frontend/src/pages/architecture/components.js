@@ -110,7 +110,7 @@ export const COMPONENTS = [
     rationale: 'A local filesystem keeps the prototype dependency-free, and rename gives atomic publication (ADR-0004).',
   },
   {
-    id: 'restore', name: 'Restoration engine', layer: 'processing', x: 220, y: 300, w: 160,
+    id: 'restore', name: 'Restoration engine', layer: 'processing', x: 430, y: 390, w: 160,
     purpose: 'Rebuilds a file in a temporary file from its ordered manifest, verifying every chunk and the whole file before it is served.',
     inputs: ['File ID'],
     outputs: ['Verified file (or an explicit error)'],
@@ -121,7 +121,7 @@ export const COMPONENTS = [
     rationale: 'Verifying before serving means a damaged store can never produce a silently wrong file.',
   },
   {
-    id: 'auditor', name: 'Integrity auditor', layer: 'processing', x: 220, y: 390, w: 160,
+    id: 'auditor', name: 'Integrity auditor', layer: 'processing', x: 430, y: 480, w: 160,
     purpose: 'Read-only detection of missing/corrupt/orphan chunks, ref-count mismatches, stale staging files and incomplete operations. A separate reconciler does explicit, reported cleanup.',
     inputs: ['Metadata snapshot', 'Chunk store contents'],
     outputs: ['Findings; reconciliation action list'],

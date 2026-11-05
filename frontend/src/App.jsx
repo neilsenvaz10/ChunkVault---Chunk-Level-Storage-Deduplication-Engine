@@ -1,17 +1,20 @@
+import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { UploadHistoryProvider } from './context/UploadHistory'
 import AppLayout from './layouts/AppLayout'
-import ArchitecturePage from './pages/ArchitecturePage'
 import ComparePage from './pages/ComparePage'
 import Dashboard from './pages/Dashboard'
-import DatabasePage from './pages/DatabasePage'
-import DocsPage from './pages/DocsPage'
 import FileDetailPage from './pages/FileDetailPage'
 import FilesPage from './pages/FilesPage'
-import PerformancePage from './pages/PerformancePage'
 import ReliabilityPage from './pages/ReliabilityPage'
-import SimulationPage from './pages/SimulationPage'
-import TradeoffsPage from './pages/TradeoffsPage'
+
+// Heavy, rarely first-visited pages load on demand (the shell, dashboard and file pages stay in the main bundle).
+const ArchitecturePage = lazy(() => import('./pages/ArchitecturePage'))
+const DatabasePage = lazy(() => import('./pages/DatabasePage'))
+const DocsPage = lazy(() => import('./pages/DocsPage'))
+const PerformancePage = lazy(() => import('./pages/PerformancePage'))
+const SimulationPage = lazy(() => import('./pages/SimulationPage'))
+const TradeoffsPage = lazy(() => import('./pages/TradeoffsPage'))
 
 export default function App() {
   return (

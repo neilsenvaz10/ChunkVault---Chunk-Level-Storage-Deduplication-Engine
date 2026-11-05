@@ -79,11 +79,11 @@ export default function Runner({ onFinished }) {
           const workload = c.workloads.find((w) => w.id === form.workload)
           return (
             <>
-              <p className="muted">
+              <p className="notice notice-info">
                 Runs in a separate worker process against a private temporary store (never your stored files), one benchmark at a time, bounded to
                 {' '}{formatBytes(lim.min_size_bytes)}–{formatBytes(lim.max_size_bytes)} per file, up to {lim.max_iterations} iterations, {lim.max_runtime_seconds} s.
               </p>
-              <form className="row" onSubmit={(e) => { e.preventDefault(); start() }} aria-label="Benchmark parameters">
+              <form className="form-grid" onSubmit={(e) => { e.preventDefault(); start() }} aria-label="Benchmark parameters">
                 <label>Benchmark
                   <select value={form.kind} onChange={set('kind')} disabled={busy} aria-label="Benchmark kind">
                     <option value="pipeline">Upload / restore pipeline</option>
@@ -106,8 +106,10 @@ export default function Runner({ onFinished }) {
                 <label>Seed
                   <input type="number" min="0" value={form.seed} onChange={set('seed')} disabled={busy} aria-label="Seed" />
                 </label>
-                <button className="primary" type="submit" disabled={busy}>Start benchmark</button>
-                {busy && <button type="button" onClick={cancel}>Cancel</button>}
+                <span className="form-actions">
+                  <button className="primary" type="submit" disabled={busy} aria-busy={busy || undefined}>Start benchmark</button>
+                  {busy && <button type="button" onClick={cancel}>Cancel</button>}
+                </span>
               </form>
               {form.kind === 'pipeline' && workload && (
                 <p className="muted">{workload.description}.{workload.preset_size_bytes ? ' The size field overrides the preset.' : ''}</p>

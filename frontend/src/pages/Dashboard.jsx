@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import PipelineStrip from '../components/PipelineStrip'
-import { AsyncState, Card, MetricTile, StatusBadge, StorageBar } from '../components/ui'
+import Icon from '../components/Icon'
+import { AsyncState, Card, MetricTile, SourceChip, StatusBadge, StorageBar } from '../components/ui'
 import { useApi, useHealth } from '../hooks/useApi'
 import { api } from '../services/api'
 import { formatBytes, formatInt, formatPercent, formatRatio } from '../utils/format'
@@ -26,10 +27,57 @@ function HealthCard() {
   )
 }
 
+const ACTIONS = [
+  ['/files', 'Upload a file', 'Chunk, hash and store it', 'upload'],
+  ['/database', 'Explore chunks', 'Browse the metadata tables', 'database'],
+  ['/reliability', 'Run integrity audit', 'Read-only check of the store', 'reliability'],
+  ['/architecture', 'View architecture', 'Interactive HLD and LLD', 'architecture'],
+  ['/performance', 'Run benchmark', 'Measure on this machine', 'performance'],
+]
+
+function QuickActions() {
+  return (
+    <nav className="quick-actions" aria-label="Quick actions">
+      {ACTIONS.map(([to, title, hint, icon]) => (
+        <Link key={to + title} to={to} className="quick-action">
+          <strong><Icon name={icon} /> {title}</strong>
+          <small>{hint}</small>
+        </Link>
+      ))}
+    </nav>
+  )
+}
+
+// The three kinds of numbers in this application are kept apart on purpose.
+function DataSources() {
+  return (
+    <Card title="Where the numbers in ChunkVault come from">
+      <div className="grid-auto">
+        <div>
+          <SourceChip kind="measured" />
+          <p><strong>Storage statistics</strong> (this page) are read live from the database and chunk store.</p>
+        </div>
+        <div>
+          <SourceChip kind="measured" />
+          <p><strong>Benchmark results</strong> are timings from runs on this machine, saved with their parameters.
+            See <Link to="/performance">Performance Engineering</Link>.</p>
+        </div>
+        <div>
+          <SourceChip kind="model" />
+          <p><strong>Capacity simulation</strong> is a calculation from assumptions you enter — not a measurement.
+            See <Link to="/simulation">Capacity Simulation</Link>.</p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function Dashboard() {
   const stats = useApi((signal) => api.storageStats(signal))
   return (
     <>
+      <QuickActions />
+      <div style={{ height: 'var(--s4)' }} />
       <Card title="Upload pipeline" aside={<Link to="/architecture">Open architecture →</Link>}>
         <PipelineStrip />
       </Card>
@@ -51,9 +99,12 @@ export default function Dashboard() {
                 <MetricTile label="Chunk references" value={formatInt(s.total_chunk_references)} hint={`${formatInt(s.reused_chunk_references)} reused`} />
                 <MetricTile label="Storage saved" value={formatPercent(s.storage_savings_percent)} tone="good" />
                 <MetricTile label="Deduplication ratio" value={formatRatio(s.deduplication_ratio)} tone="good" />
+                <MetricTile label="Integrity" value="not audited" hint="No audit has run in this view; use Run integrity audit." />
               </div>
               <h3>Logical vs unique chunk payload</h3>
               <StorageBar logical={s.logical_bytes} unique={s.unique_chunk_bytes} formatBytes={formatBytes} />
+              <details className="disclosure">
+              <summary>How these figures are defined</summary>
               <dl className="defs">
                 <dt>Logical storage</dt>
                 <dd>Total size of all stored file versions, as if every file were stored whole.</dd>
@@ -65,6 +116,7 @@ export default function Dashboard() {
                   excludes SQLite metadata and filesystem overhead.
                 </dd>
               </dl>
+              </details>
               <h3>Actual footprint (not part of the savings figure)</h3>
               <p className="muted">
                 SQLite files {formatBytes(s.database_bytes)} · {formatInt(s.chunk_files)} chunk files totalling{' '}
@@ -78,6 +130,7 @@ export default function Dashboard() {
         </AsyncState>
       </Card>
 
+      <DataSources />
       <HealthCard />
     </>
   )
