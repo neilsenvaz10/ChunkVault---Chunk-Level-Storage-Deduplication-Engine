@@ -67,4 +67,34 @@ describe('top bar note and dashboard wording', () => {
     expect(screen.getByText('Supabase PostgreSQL + Storage')).toBeInTheDocument()
     expect(screen.queryByText('SQLite + Chunk Store')).toBeNull()
   })
+  const actions = async () => {
+    const qa = await screen.findByRole('navigation', { name: 'Quick actions' })
+    return [...qa.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')])
+  }
+
+  it('local mode keeps the five original quick actions, including audit and benchmark', async () => {
+    await view()
+    const links = await actions()
+    const hrefs = links.map((l) => l[1])
+    expect(hrefs).toEqual(['/files', '/database', '/reliability', '/architecture', '/performance'])
+    expect(links.map((l) => l[0]).join(' ')).toMatch(/Run integrity audit.*Run benchmark/)
+  })
+
+  it('cloud mode offers only public, working actions: no audit and no benchmark', async () => {
+    cloud()
+    await view()
+    const links = await actions()
+    const hrefs = links.map((l) => l[1])
+    expect(hrefs).toEqual(['/files', '/files/compare', '/database', '/architecture', '/docs'])
+    expect(hrefs).not.toContain('/reliability')
+    expect(hrefs).not.toContain('/performance')
+    expect(links.map((l) => l[0]).join(' ')).not.toMatch(/audit|benchmark/i)
+  })
+
+  it('cloud mode does not say benchmarks were measured on "this machine" on the dashboard', async () => {
+    cloud()
+    await view()
+    await actions()
+    expect(screen.getByText(/benchmarks are not run in the public demo/)).toBeInTheDocument()
+  })
 })

@@ -63,16 +63,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 closer()  # cloud: close the HTTP client and the connection pool
         # Shutdown: connections are per-request and already closed; nothing to release.
 
+    cloud_mode = settings.backend == "cloud"
     app = FastAPI(
         title="ChunkVault API",
         version=settings.app_version,
         description=(
+            "Chunk-level storage deduplication engine (hosted demo: single process, one worker; Supabase PostgreSQL + private "
+            "Storage). Reads are public; uploads, downloads, deletes and simulations need the demo token; audits, reconciliation, "
+            "garbage collection, benchmarks and the fault lab need the admin token."
+            if cloud_mode else
             "Chunk-level storage deduplication engine (single process, sequential "
             "writes: run with ONE worker). No authentication: local use only."
         ),
         lifespan=lifespan,
-        # under /api so the dev proxy reaches them and the SPA keeps its own /docs route
-        docs_url="/api/docs",
+        # under /api so the dev proxy reaches them and the SPA keeps its own /docs route.
+        # The interactive Swagger page exists locally only; /api/openapi.json stays in both modes because the in-app API explorer reads it.
+        docs_url=None if cloud_mode else "/api/docs",
         openapi_url="/api/openapi.json",
         redoc_url=None,
         responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},

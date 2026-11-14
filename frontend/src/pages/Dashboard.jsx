@@ -36,10 +36,19 @@ const ACTIONS = [
   ['/performance', 'Run benchmark', 'Measure on this machine', 'performance'],
 ]
 
+// The public demo has no audit or benchmark for visitors (admin-only), so it offers other read-only actions instead.
+const CLOUD_ACTIONS = [
+  ['/files', 'Upload a file', 'Chunk, hash and store it', 'upload'],
+  ['/files/compare', 'Compare two files', 'See which chunks they share', 'files'],
+  ['/database', 'Explore chunks', 'Browse the metadata tables', 'database'],
+  ['/architecture', 'View architecture', 'Interactive HLD and LLD', 'architecture'],
+  ['/docs', 'Read the documentation', 'Design, decisions and verification', 'docs'],
+]
+
 function QuickActions() {
   return (
     <nav className="quick-actions" aria-label="Quick actions">
-      {ACTIONS.map(([to, title, hint, icon]) => (
+      {(isCloudMode() ? CLOUD_ACTIONS : ACTIONS).map(([to, title, hint, icon]) => (
         <Link key={to + title} to={to} className="quick-action">
           <strong><Icon name={icon} /> {title}</strong>
           <small>{hint}</small>
@@ -60,7 +69,7 @@ function DataSources() {
         </div>
         <div>
           <SourceChip kind="measured" />
-          <p><strong>Benchmark results</strong> are timings from runs on this machine, saved with their parameters.
+          <p><strong>Benchmark results</strong> are timings from runs on {isCloudMode() ? 'the machine that ran them (benchmarks are not run in the public demo)' : 'this machine'}, saved with their parameters.
             See <Link to="/performance">Performance Engineering</Link>.</p>
         </div>
         <div>

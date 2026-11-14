@@ -35,8 +35,8 @@ sentinel secrets in the environment and scan the output.)
 * One rewrite: every path that is not `/api/...`, not `/assets/...` and has no file extension serves `/index.html` (BrowserRouter deep links and
   refresh). Real files win first; a missing asset or `/api/...` path stays a 404 instead of silently returning HTML.
 * Security headers: `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a restrictive Permissions-Policy, COOP, and a CSP with
-  no inline or eval scripts (`connect-src 'self' https:` because the backend host is not known when the file is written; tighten it to your
-  exact Render origin after the first deploy). Hashed assets are cached immutably; `index.html` is `no-cache`.
+  no inline or eval scripts (`connect-src 'self' https://chunkvault-api.onrender.com`: this site plus the one verified backend origin; if the backend URL ever
+  changes, update this header together with `VITE_API_BASE_URL`). Hashed assets are cached immutably; `index.html` is `no-cache`.
 * Verified locally by serving a cloud-mode build with these headers and rewrites in a browser: pages, documentation and the Mermaid diagrams
   render with no CSP violations.
 

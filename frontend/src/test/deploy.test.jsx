@@ -42,7 +42,14 @@ describe('vercel.json', () => {
 
   it('has exactly one rewrite and does not proxy /api to anywhere (the browser talks to the backend directly)', () => {
     expect(vercel.rewrites).toHaveLength(1)
-    expect(JSON.stringify(vercel)).not.toMatch(/onrender\.com|supabase|"destination":\s*"https?:/i)
+    expect(JSON.stringify(vercel)).not.toMatch(/supabase|"destination":\s*"https?:/i)
+  })
+
+  it('limits connect-src to this site and the one verified backend origin (no wildcard https:, no Supabase, no other host)', () => {
+    const csp = vercel.headers.find((h) => h.source === '/(.*)').headers.find((x) => x.key === 'Content-Security-Policy').value
+    const connect = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('connect-src'))
+    expect(connect).toBe("connect-src 'self' https://chunkvault-api.onrender.com")
+    expect(connect).not.toMatch(/\shttps:(\s|$)|\*|supabase|http:/)
   })
 
   it('sets security headers on every response, a strict CSP, and long-lived caching only for hashed assets', () => {
