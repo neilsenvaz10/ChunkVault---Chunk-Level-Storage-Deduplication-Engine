@@ -88,7 +88,9 @@ export default function AppLayout() {
             )}
           </div>
           <div className="topbar-right">
-            <span className="topbar-note">Prototype · single machine · sequential writes</span>
+            <span className="topbar-note">
+              {isCloudMode() ? 'Public demo · hosted backend · one writer at a time' : 'Prototype · single machine · sequential writes'}
+            </span>
             <HealthIndicator />
           </div>
         </header>

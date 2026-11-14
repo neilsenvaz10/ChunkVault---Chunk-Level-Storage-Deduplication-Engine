@@ -4,6 +4,7 @@ import Icon from '../components/Icon'
 import { AsyncState, Card, MetricTile, SourceChip, StatusBadge, StorageBar } from '../components/ui'
 import { useApi, useHealth } from '../hooks/useApi'
 import { api } from '../services/api'
+import { isCloudMode } from '../config/mode'
 import { formatBytes, formatInt, formatPercent, formatRatio } from '../utils/format'
 
 function HealthCard() {
@@ -74,6 +75,7 @@ function DataSources() {
 
 export default function Dashboard() {
   const stats = useApi((signal) => api.storageStats(signal))
+  const cloud = isCloudMode()
   return (
     <>
       <QuickActions />
@@ -113,14 +115,14 @@ export default function Dashboard() {
                 <dt>Storage savings</dt>
                 <dd>
                   <code>100 × (logical − unique) / logical</code>: the reduction achieved by chunk reuse. It counts payload only and
-                  excludes SQLite metadata and filesystem overhead.
+                  excludes {cloud ? 'database metadata and storage overhead' : 'SQLite metadata and filesystem overhead'}.
                 </dd>
               </dl>
               </details>
               <h3>Actual footprint (not part of the savings figure)</h3>
               <p className="muted">
-                SQLite files {formatBytes(s.database_bytes)} · {formatInt(s.chunk_files)} chunk files totalling{' '}
-                {formatBytes(s.chunk_store_bytes)} (file sizes, excluding filesystem block overhead) · staging{' '}
+                {cloud ? 'Database' : 'SQLite files'} {formatBytes(s.database_bytes)} · {formatInt(s.chunk_files)} {cloud ? 'chunk objects' : 'chunk files'} totalling{' '}
+                {formatBytes(s.chunk_store_bytes)} ({cloud ? 'object sizes, excluding storage overhead' : 'file sizes, excluding filesystem block overhead'}) · staging{' '}
                 {formatBytes(s.staging_bytes)}
                 {s.unreferenced_chunks > 0 &&
                   ` · ${s.unreferenced_chunks} unreferenced chunk(s) (${formatBytes(s.unreferenced_chunk_bytes)}) awaiting reclamation`}

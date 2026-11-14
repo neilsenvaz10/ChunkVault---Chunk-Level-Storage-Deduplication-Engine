@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Card } from '../components/ui'
+import { isCloudMode } from '../config/mode'
 import ApiExplorer from './architecture/ApiExplorer'
 import CdcExplorer from './architecture/CdcExplorer'
 import ConsistencyView from './architecture/ConsistencyView'
@@ -43,7 +44,7 @@ export default function ArchitecturePage() {
       {tab === 'components' && (
         <Card title="Component diagram">
           <p className="muted">
-            Browser → React → FastAPI → CDC → SHA-256 → Deduplication → SQLite + local chunk store, plus restoration and integrity
+            Browser → React → FastAPI → CDC → SHA-256 → Deduplication → {isCloudMode() ? 'Supabase PostgreSQL + Storage' : 'SQLite + local chunk store'}, plus restoration and integrity
             auditing. One process with modular internals — these are the project&rsquo;s real modules, not microservices.
             Select a component; its dependencies are highlighted.
           </p>
