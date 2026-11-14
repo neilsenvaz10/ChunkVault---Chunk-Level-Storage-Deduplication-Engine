@@ -50,6 +50,13 @@ class WriterBusyError(ChunkVaultError):
     status_code = 409
 
 
+class WriterLockLostError(ChunkVaultError):
+    """The writer lock's database session failed while an operation held it (cloud backend only)."""
+
+    code = "writer_lock_lost"
+    status_code = 503
+
+
 class WriterLock:
     def __init__(self, path: Path, timeout_seconds: float = 30.0) -> None:
         self._path = Path(path)
@@ -81,6 +88,9 @@ class WriterLock:
             if fh is not None:
                 fh.close()
             self._thread_lock.release()
+
+    def ensure_held(self) -> None:
+        """No-op: an OS file lock cannot be lost while its owner is alive (the cloud lock overrides this meaningfully)."""
 
     def is_free(self) -> bool:
         """True if no writer currently holds the lock (momentary check)."""

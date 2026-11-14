@@ -3,6 +3,8 @@ import Chart from '../components/Chart'
 import { Card, ErrorNotice, MetricTile, SourceChip, StatusBadge } from '../components/ui'
 import { api } from '../services/api'
 import { formatBytes, formatCompact, formatInt, formatPercent, formatRatio } from '../utils/format'
+import { NotInDemo } from '../components/CloudAccess'
+import { isCloudMode } from '../config/mode'
 
 const MIB = 1024 * 1024
 export const DEFAULTS = {
@@ -80,7 +82,7 @@ function useSimulation(form) {
   return state
 }
 
-export default function SimulationPage() {
+function SimulationPageInner() {
   const [form, setForm] = useState(DEFAULTS)
   const sim = useSimulation(form)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -189,4 +191,10 @@ export default function SimulationPage() {
       </Card>
     </>
   )
+}
+
+// The model runs on the backend for every change of an input: not offered on the shared free-tier demo server.
+export default function SimulationPage() {
+  if (isCloudMode()) return <NotInDemo what="The capacity simulation" reason="It asks the server to recompute the model on every input change, which the shared free demo server does not offer." />
+  return <SimulationPageInner />
 }

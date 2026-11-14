@@ -36,6 +36,24 @@ class ChunkWriteError(ChunkStoreError):
     code = "chunk_write_error"
 
 
+class ChunkStoreUnavailableError(ChunkStoreError):
+    """The remote chunk store could not be reached or kept failing after the bounded retries (timeouts, 5xx, 429, network).
+
+    ``details["outcome"] == "unknown"`` marks a write whose result could not be established: the object may or may not exist.
+    Such an object is at worst an unreferenced orphan, which reconciliation removes; metadata is never committed for it.
+    """
+
+    code = "storage_unavailable"
+    status_code = 503
+
+
+class ChunkStoreAuthError(ChunkStoreError):
+    """The storage service rejected the server's credentials (a deployment/configuration problem, never a user error)."""
+
+    code = "storage_auth_error"
+    status_code = 502
+
+
 @dataclass(frozen=True)
 class StagedChunk:
     hash: str

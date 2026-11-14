@@ -46,6 +46,7 @@ class AuditReport:
     chunks_checked: int
     files_checked: int
     findings: list[Finding] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # how far the check went (cloud audits are sampled; see cloud_auditor)
 
     @property
     def healthy(self) -> bool:

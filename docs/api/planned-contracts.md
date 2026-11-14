@@ -7,6 +7,7 @@ Interactive docs for what is actually served: `/api/docs` and `/api/openapi.json
 | Method | Path | Response |
 |---|---|---|
 | GET | `/api/health` | `200 HealthResponse` incl. `max_upload_bytes` so clients can validate before sending (`503` with the same body, `status: "degraded"`, if the database check fails) |
+| GET | `/api/health/live` | `200 {status, service, version}`. Liveness for the platform health check: never touches the database, so an outage or an exhausted connection pool cannot make the platform restart a healthy process. `/api/health` (alias `/api/health/ready`) is the readiness check including the database. The liveness route is exempt from the Host allow-list (it returns a constant) |
 | GET | `/api/planned-endpoints` | `200 PlannedEndpointsResponse` — the still-unimplemented endpoints, each `status: "planned"` |
 | POST | `/api/files` | multipart field `file` → `201 UploadResponse` (counts plus `chunk_outcomes`: one `{chunk_index, chunk_hash, chunk_size, decision}` per position with decision `new` / `reused` / `adopted` / `repeated_in_file`; this is a fact about that upload only and is **not persisted**); `413 upload_too_large`; `507 insufficient_storage` (advisory free-space preflight on the chunk store's volume, or the disk filled up mid-upload; nothing is kept); `422` bad/missing file or filename; `409 writer_busy` / `chunk_unavailable` / `chunk_identity_conflict`; `500 upload_failed` / `chunk_corrupt` |
 | GET | `/api/files?limit&offset` | `200 FileListResponse` (newest first, all statuses; each item includes `chunk_count`) |

@@ -13,6 +13,7 @@ import sqlite3
 _ERRNOS = {errno.ENOSPC} | ({errno.EDQUOT} if hasattr(errno, "EDQUOT") else set())
 _WINERRORS = {39, 112}  # ERROR_HANDLE_DISK_FULL, ERROR_DISK_FULL
 _SQLITE_FULL = 13
+_PG_DISK_FULL = "53100"  # PostgreSQL SQLSTATE disk_full
 
 
 def is_disk_full(exc: BaseException | None) -> bool:
@@ -23,6 +24,8 @@ def is_disk_full(exc: BaseException | None) -> bool:
         if isinstance(exc, sqlite3.Error):
             if getattr(exc, "sqlite_errorcode", None) == _SQLITE_FULL or "disk is full" in str(exc).lower():
                 return True
+        if getattr(exc, "sqlstate", None) == _PG_DISK_FULL:  # psycopg errors expose the SQLSTATE; no import needed
+            return True
         exc = exc.__cause__ or exc.__context__
         seen += 1
     return False

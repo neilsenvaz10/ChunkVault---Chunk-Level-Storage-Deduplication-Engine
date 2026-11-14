@@ -19,7 +19,7 @@ export const MODULES = [
     description: 'Read-only view of the SQLite metadata model: tables, keys, relationships and the reference-count invariant.',
   },
   {
-    path: '/reliability', group: 'Engineering', icon: 'reliability', label: 'Reliability & Consistency', implemented: true,
+    path: '/reliability', group: 'Engineering', icon: 'reliability', label: 'Reliability & Consistency', implemented: true, cloudAvailable: false,
     description: 'Read-only integrity audit and explicit reconciliation of crash leftovers.',
   },
   {
@@ -27,7 +27,7 @@ export const MODULES = [
     description: 'Reproducible benchmarks of the real pipeline and a CDC vs fixed-size comparison, with every number measured on this machine.',
   },
   {
-    path: '/simulation', group: 'Engineering', icon: 'simulation', label: 'Capacity Simulation', implemented: true,
+    path: '/simulation', group: 'Engineering', icon: 'simulation', label: 'Capacity Simulation', implemented: true, cloudAvailable: false,
     description: 'A mathematical capacity and scalability model driven by your assumptions. It is not a measurement or a load test.',
   },
   {

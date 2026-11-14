@@ -1,5 +1,33 @@
-fastapi>=0.115
-uvicorn>=0.30
-python-multipart>=0.0.9
-pytest>=8.0
-httpx>=0.27
+# Runtime dependencies of the ChunkVault backend (Render Free: `pip install -r backend/requirements.txt`).
+# EXACT pins of the set the full test suite passed on with Python 3.12.12 (fresh install). Direct dependencies first, then the
+# transitive ones they resolve to, so a deploy tomorrow installs what was tested today. Update deliberately: install the new set
+# in a fresh virtualenv, run the suite, then re-pin.
+#
+# Not here on purpose: pytest and the migration tools (alembic/SQLAlchemy) -> requirements-dev.txt. Migrations run by hand from the
+# owner's machine, never on the web service.
+
+# --- direct dependencies
+fastapi==0.162.7
+uvicorn==0.54.0
+python-multipart==0.0.33
+psycopg[binary,pool]==3.3.9
+psycopg-pool==3.3.3
+httpx==0.28.1
+
+# --- transitive (resolved and verified together with the above)
+annotated-doc==0.0.6
+annotated-types==0.8.0
+anyio==4.16.0
+certifi==2026.10.23
+click==8.5.1
+h11==0.16.0
+httpcore==1.0.9
+idna==3.20
+opentelemetry-api==1.45.2
+psycopg-binary==3.3.9
+pydantic==2.14.3
+pydantic_core==2.50.4
+starlette==1.10.0
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+tzdata==2026.6

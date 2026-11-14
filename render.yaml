@@ -1,0 +1,67 @@
+# Render Blueprint for the ChunkVault backend (Render Free web service).
+#
+# Nothing here deploys by itself: autoDeploy is off, and every secret is declared with `sync: false`, which means "ask me for the
+# value in the dashboard" -- no secret is, or may ever be, written into this file.
+#
+# SECRETS to enter in the Render dashboard (never commit them):
+#   DATABASE_URL            the RESTRICTED role's Session Pooler URL (user chunkvault_app.<project-ref>), port 5432
+#   SUPABASE_URL            https://<project-ref>.supabase.co
+#   SUPABASE_SERVICE_KEY    the server-side secret key (never a publishable/anon key, never in the frontend)
+#   CHUNKVAULT_DEMO_TOKEN   random, >= 24 characters
+#   CHUNKVAULT_ADMIN_TOKEN  random, >= 24 characters, different from the demo token
+#   CHUNKVAULT_CORS_ORIGINS the exact https origin of the Vercel production site (preview URLs are not allowed)
+# NEVER set OWNER_DATABASE_URL here: the owner connection is for migrations and role setup from your own machine only.
+#
+# Free-plan facts this configuration respects: ONE worker (the writer lock and in-memory job state assume one process), an ephemeral
+# disk (scratch files live under /tmp and vanish on restart, which is harmless), 512 MB of memory (a 10 MiB upload peaks around
+# 30 MiB above idle), and a service that sleeps when idle (the first request after a sleep waits for the wake-up).
+services:
+  - type: web
+    name: chunkvault-api
+    runtime: python
+    plan: free
+    # Closest Render region to the Supabase project (Mumbai, ap-south-1): every upload makes many database round trips.
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # $PORT is provided by Render. Exactly one worker. --factory because the app is built by create_app() (settings are read at start).
+    startCommand: uvicorn app.main:create_app --factory --host 0.0.0.0 --port $PORT --workers 1
+    # Liveness only: it never touches the database, so a Supabase outage cannot make Render restart a healthy process.
+    # Database readiness is GET /api/health (alias /api/health/ready).
+    healthCheckPath: /api/health/live
+    autoDeploy: false
+    envVars:
+      # The exact version the dependency pins were tested with (a full x.y.z is required by Render).
+      - key: PYTHON_VERSION
+        value: 3.12.12
+      - key: CHUNKVAULT_BACKEND
+        value: cloud
+      # Scratch space for the upload being received and the file being restored; nothing persistent lives here.
+      - key: CHUNKVAULT_DATA_DIR
+        value: /tmp/chunkvault
+      # Render provides RENDER_EXTERNAL_HOSTNAME itself; the backend adds exactly that name to its Host allow-list (no wildcard).
+      - key: SUPABASE_BUCKET
+        value: chunkvault-chunks
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CHUNKVAULT_DEMO_TOKEN
+        sync: false
+      - key: CHUNKVAULT_ADMIN_TOKEN
+        sync: false
+      - key: CHUNKVAULT_CORS_ORIGINS
+        sync: false
+      # X-Forwarded-For is NOT trusted until CHUNKVAULT_TRUSTED_PROXY_CIDRS names the proxy's network range (comma-separated CIDRs).
+      # Render's proxy range has not been verified, so it is left unset: the limiter then sees the proxy as the client (one shared
+      # bucket for all visitors: safe, but one abuser can lock the shared auth-failure budget). After verifying the range on the
+      # deployed service, set the CIDRs and CHUNKVAULT_TRUSTED_PROXY_HOPS (proxies that append to the header).
+      # Abuse limits and deadlines (defaults shown; all optional): upload deadline, concurrency, auth-failure lockout, expensive-request rate.
+      - key: CHUNKVAULT_UPLOAD_DEADLINE_SECONDS
+        value: "90"
+      - key: CHUNKVAULT_MAX_CONCURRENT_UPLOADS
+        value: "2"
+      - key: CHUNKVAULT_MAX_CONCURRENT_RESTORES
+        value: "3"

@@ -1,0 +1,17 @@
+# Development, test and migration tooling (never installed on the Render web service).
+#   pip install -r backend/requirements-dev.txt
+# Same exact-pin policy as requirements.txt (verified together on Python 3.12.12).
+-r requirements.txt
+
+pytest==9.2.0
+alembic==1.20.1
+SQLAlchemy==2.1.8
+
+# --- transitive
+colorama==0.4.6
+iniconfig==2.3.1
+Mako==1.4.3
+MarkupSafe==3.0.4
+packaging==26.3
+pluggy==1.7.0
+Pygments==2.21.0

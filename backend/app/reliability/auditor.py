@@ -1,5 +1,5 @@
-"""Read-only integrity audit. Opens its own connection with ``query_only`` so it
-cannot modify metadata, and never touches the chunk store except to read."""
+"""Read-only integrity audit. Reads the metadata inside a read-only snapshot (``Database.snapshot``) so it cannot modify
+metadata and sees one consistent point in time, and never touches the chunk store except to read."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from app.core.config import Settings
 from app.core.errors import NotFoundError
-from app.database.connection import connect
+from app.database.interfaces import Database
 from app.database.repository import MetadataRepository
 from app.database.states import ChunkState, FileStatus
 from app.hashing.sha256 import Sha256Service
@@ -21,20 +21,14 @@ def parse_ts(value: str) -> float:
 
 
 class Auditor:
-    def __init__(self, settings: Settings, repo: MetadataRepository, store: FilesystemChunkStore,
+    def __init__(self, settings: Settings, db: Database, repo: MetadataRepository, store: FilesystemChunkStore,
                  hasher: Sha256Service) -> None:
-        self._s, self._repo, self._store, self._hasher = settings, repo, store, hasher
-
-    def _conn(self):
-        conn = connect(self._s.db_path)
-        conn.execute("PRAGMA query_only = ON")
-        return conn
+        self._s, self._db, self._repo, self._store, self._hasher = settings, db, repo, store, hasher
 
     # -- one file ------------------------------------------------------------
 
     def verify_file(self, file_id: str) -> AuditReport:
-        conn = self._conn()
-        try:
+        with self._db.connection() as conn, self._db.snapshot(conn):
             file = self._repo.get_file(conn, file_id)
             if file is None:
                 raise NotFoundError("file not found")
@@ -57,51 +51,47 @@ class Auditor:
                     findings.append(Finding("file_hash_mismatch", file_id,
                                             "reassembled size/SHA-256 differs from the file record"))
             return AuditReport(chunks_checked=len(manifest), files_checked=1, findings=findings)
-        finally:
-            conn.close()
 
     # -- whole store ---------------------------------------------------------
 
     def verify_store(self, verify_chunk_bytes: bool = True) -> AuditReport:
-        conn = self._conn()
         now = time.time()
         stale = self._s.staging_stale_seconds
         findings: list[Finding] = []
-        try:
-            conn.execute("BEGIN")  # one consistent snapshot of the metadata
-            rows = self._repo.list_chunks(conn, limit=-1, offset=0)
-            row_hashes = {r.hash for r in rows}
-            for r in rows:
-                if r.state is ChunkState.PENDING:
-                    findings.append(Finding("pending_chunk", r.hash, "chunk row left in 'pending' state"))
-                if r.ref_count == 0:
-                    findings.append(Finding("unreferenced_chunk", r.hash,
-                                            "metadata row with ref_count 0; reconciliation can reclaim it"))
-                if r.state is ChunkState.CORRUPT:
-                    findings.append(Finding("corrupt_chunk", r.hash, "chunk is flagged 'corrupt'"))
-                    continue
-                status = (self._store.verify(r.hash, r.size_bytes) if verify_chunk_bytes
-                          else (ChunkStatus.OK if self._store.exists(r.hash) else ChunkStatus.MISSING))
-                if status is not ChunkStatus.OK:
-                    findings.append(self._chunk_finding(
-                        r.hash, status, self._repo.chunks_referenced_by_file(conn, r.hash)))
-            for h in self._store.iter_hashes():
-                if h not in row_hashes:
-                    findings.append(Finding("orphan_chunk_file", h, "chunk file has no metadata row"))
-            for h, recorded, actual in self._repo.ref_count_mismatches(conn):
-                findings.append(Finding("ref_count_mismatch", h,
-                                        f"recorded ref_count {recorded}, manifest rows {actual}"))
-            files = self._repo.list_files(conn, limit=-1, offset=0)
-            for f in files:
-                findings += self._manifest_findings(f, self._repo.get_file_chunks(conn, f.file_id))
-                if f.status is FileStatus.UPLOADING and now - parse_ts(f.created_at) >= stale:
-                    findings.append(Finding("incomplete_file", f.file_id, "file stuck in 'uploading'"))
-            for op in self._repo.list_running_operations(conn):
-                if now - parse_ts(op.started_at) >= stale:
-                    findings.append(Finding(
-                        "stuck_operation", str(op.operation_id),
-                        f"{op.operation_type.value} operation still 'running' since {op.started_at}"))
-            conn.execute("COMMIT")
+        with self._db.connection() as conn:
+            with self._db.snapshot(conn):  # one consistent snapshot of the metadata
+                rows = self._repo.list_chunks(conn, limit=-1, offset=0)
+                row_hashes = {r.hash for r in rows}
+                for r in rows:
+                    if r.state is ChunkState.PENDING:
+                        findings.append(Finding("pending_chunk", r.hash, "chunk row left in 'pending' state"))
+                    if r.ref_count == 0:
+                        findings.append(Finding("unreferenced_chunk", r.hash,
+                                                "metadata row with ref_count 0; reconciliation can reclaim it"))
+                    if r.state is ChunkState.CORRUPT:
+                        findings.append(Finding("corrupt_chunk", r.hash, "chunk is flagged 'corrupt'"))
+                        continue
+                    status = (self._store.verify(r.hash, r.size_bytes) if verify_chunk_bytes
+                              else (ChunkStatus.OK if self._store.exists(r.hash) else ChunkStatus.MISSING))
+                    if status is not ChunkStatus.OK:
+                        findings.append(self._chunk_finding(
+                            r.hash, status, self._repo.chunks_referenced_by_file(conn, r.hash)))
+                for h in self._store.iter_hashes():
+                    if h not in row_hashes:
+                        findings.append(Finding("orphan_chunk_file", h, "chunk file has no metadata row"))
+                for h, recorded, actual in self._repo.ref_count_mismatches(conn):
+                    findings.append(Finding("ref_count_mismatch", h,
+                                            f"recorded ref_count {recorded}, manifest rows {actual}"))
+                files = self._repo.list_files(conn, limit=-1, offset=0)
+                for f in files:
+                    findings += self._manifest_findings(f, self._repo.get_file_chunks(conn, f.file_id))
+                    if f.status is FileStatus.UPLOADING and now - parse_ts(f.created_at) >= stale:
+                        findings.append(Finding("incomplete_file", f.file_id, "file stuck in 'uploading'"))
+                for op in self._repo.list_running_operations(conn):
+                    if now - parse_ts(op.started_at) >= stale:
+                        findings.append(Finding(
+                            "stuck_operation", str(op.operation_id),
+                            f"{op.operation_type.value} operation still 'running' since {op.started_at}"))
             for p in self._store.iter_staged():
                 try:
                     age = now - p.stat().st_mtime
@@ -110,8 +100,6 @@ class Auditor:
                 if age >= stale:
                     findings.append(Finding("orphan_staging_file", p.name, "stale file in staging area"))
             return AuditReport(chunks_checked=len(rows), files_checked=len(files), findings=findings)
-        finally:
-            conn.close()
 
     # -- helpers -------------------------------------------------------------
 

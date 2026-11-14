@@ -3,7 +3,11 @@ database; nothing under the real ``data/`` directory is touched."""
 
 from __future__ import annotations
 
+import os
+
 import pytest
+
+os.environ["CHUNKVAULT_NO_DOTENV"] = "1"  # tests never pick up a developer's real backend/.env (also inherited by subprocesses)
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -81,3 +85,19 @@ def make_data(seed: int, size: int) -> bytes:
     import random
 
     return random.Random(seed).randbytes(size)
+
+
+@pytest.fixture(autouse=True)
+def _bounded_postgres_tests(request):
+    """A PostgreSQL test that hangs (a lock that is never released, a pool that never answers) must not hang the run: after 90 s
+    the process dumps every thread's stack and exits, so the cause is visible. Passing tests cancel the timer."""
+    if request.node.get_closest_marker("postgres") is None:
+        yield
+        return
+    import faulthandler
+
+    faulthandler.dump_traceback_later(90, exit=True)
+    try:
+        yield
+    finally:
+        faulthandler.cancel_dump_traceback_later()

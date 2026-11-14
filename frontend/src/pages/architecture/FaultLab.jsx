@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { AsyncState, Card, ErrorNotice, MetricTile, StatusBadge } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { api } from '../../services/api'
+import { AdminOnly } from '../../components/CloudAccess'
+import { isCloudMode } from '../../config/mode'
 
 // Honest wording for the backend-computed verification status.
 export const STATUS_TEXT = {
@@ -146,7 +148,7 @@ function Result({ r }) {
   )
 }
 
-export default function FaultLab() {
+function FaultLabInner() {
   const list = useApi((signal) => api.reliabilityScenarios(signal))
   const [selected, setSelected] = useState(null)
   const [state, setState] = useState({ status: 'idle', result: null, error: null })
@@ -249,4 +251,10 @@ export default function FaultLab() {
       }}
     </AsyncState>
   )
+}
+
+// Administrative controls are not offered in the public cloud demo (the browser never holds an administrator token).
+export default function FaultLab() {
+  if (isCloudMode()) return <AdminOnly what="The fault injection lab" />
+  return <FaultLabInner />
 }

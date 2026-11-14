@@ -25,3 +25,23 @@ data/benchmarks/*
 # Scratch
 scratch_*.log
 data/*.lock
+
+# Secrets / local cloud config
+.env.*
+!.env.example
+*.pem
+supabase-local*
+cloud-migration/*.secret*
+.app_db_password*
+
+# Generated demo media and reports (large, not needed to build or run the app; docs/**/*.md ARE needed and stay tracked)
+docs/video/
+docs/.video_work/
+docs/*.gif
+docs/*.pdf
+docs/*.docx
+docs/*.mp4
+docs/*.wav
+
+# Local tooling config (dev-server launcher for the desktop app); not needed by other contributors
+.claude/launch.json

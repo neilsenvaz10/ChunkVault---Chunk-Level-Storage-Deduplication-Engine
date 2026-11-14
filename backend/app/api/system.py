@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_services
+from app.api.ratelimit import throttle_expensive
 from app.chunking.rabin import POLY, POLY_DEGREE
 from app.core.config import KIB
 from app.core.errors import InvalidParametersError
@@ -64,7 +65,8 @@ def _scheme(name: str, original: list[bytes], modified: list[bytes]) -> SchemeRe
         reuse_percent=(100.0 * sum(m.size for m in reused) / total) if total else None)
 
 
-@router.get("/chunking-demo", response_model=ChunkingDemoResponse, responses={422: {"model": ErrorResponse}},
+@router.get("/chunking-demo", response_model=ChunkingDemoResponse, responses={422: {"model": ErrorResponse}, 429: {"model": ErrorResponse}},
+            dependencies=[Depends(throttle_expensive)],
             summary="Run the real chunker and a fixed-size chunker on seeded generated data with an insertion")
 def chunking_demo(
     seed: Annotated[int, Query(ge=0, le=2**31 - 1)] = 7,

@@ -486,11 +486,10 @@ def test_audit_is_strictly_read_only(svc):
     rep = svc.auditor.verify_store()
     assert {"corrupt_chunk", "orphan_staging_file", "orphan_chunk_file"} <= set(kinds(rep))
     assert snapshot(svc) == before  # no row, chunk file or staging file changed
-    # the audit connection itself refuses writes
-    conn = svc.auditor._conn()
-    with pytest.raises(sqlite3.OperationalError):
-        conn.execute("DELETE FROM files")
-    conn.close()
+    # the read-only snapshot the audit runs in refuses writes
+    with svc.db.connection() as conn, svc.db.snapshot(conn):
+        with pytest.raises(sqlite3.OperationalError):
+            conn.execute("DELETE FROM files")
 
 
 def test_audit_unknown_file(svc):

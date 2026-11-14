@@ -26,8 +26,8 @@ from app.benchmarking.profiler import Profiler, summarize
 from app.chunking.rabin import RabinChunker
 from app.core.config import CDCConfig, Settings
 from app.core.services import Services, build_services
-from app.database.connection import connect
 from app.database.init import initialize_database
+from app.database.sqlite import SqliteDatabase
 from app.storage.stats import compute_stats
 
 Progress = Callable[[str, int, int, str], None]
@@ -113,9 +113,6 @@ class _TimedChunker:
 def instrumented(svc: Services, prof: Profiler, *, phase: str) -> Iterator[None]:
     """Install stage timers around the real components for one phase ('upload' or 'restore'),
     restoring everything afterwards."""
-    import app.deduplication.upload as upload_mod
-    import app.restoration.engine as restore_mod
-
     undo: list[Callable[[], None]] = []
 
     def patch(obj, name, value):
@@ -145,31 +142,37 @@ def instrumented(svc: Services, prof: Profiler, *, phase: str) -> Iterator[None]
         if not name.startswith("_") and callable(getattr(repo, name)):
             patch(repo, name, timed(getattr(repo, name), "metadata"))
 
-    mods = [upload_mod] if phase == "upload" else [restore_mod]
-    for mod in mods:
-        orig_connect = mod.connect
+    # Time metadata-database work (opening a connection, BEGIN/COMMIT) through the SQLite database object every engine
+    # component shares; the benchmark always runs on its own local SQLite store.
+    db = svc.db
+    original_connection = db.connection
 
-        def connect_w(*a, _orig=orig_connect, **k):
+    @contextmanager
+    def connection_w():
+        with prof.section("metadata"):
+            cm = original_connection()
+            conn = cm.__enter__()
+        try:
+            yield conn
+        finally:
+            cm.__exit__(None, None, None)
+
+    @contextmanager
+    def tx_w(conn):
+        with prof.section("metadata"):
+            conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield conn
+        except BaseException:
             with prof.section("metadata"):
-                return _orig(*a, **k)
-
-        @contextmanager
-        def tx_w(conn):
+                conn.execute("ROLLBACK")
+            raise
+        else:
             with prof.section("metadata"):
-                conn.execute("BEGIN IMMEDIATE")
-            try:
-                yield conn
-            except BaseException:
-                with prof.section("metadata"):
-                    conn.execute("ROLLBACK")
-                raise
-            else:
-                with prof.section("metadata"):
-                    conn.execute("COMMIT")
+                conn.execute("COMMIT")
 
-        original_connect, original_tx = mod.connect, mod.transaction
-        mod.connect, mod.transaction = connect_w, tx_w
-        undo.append(lambda m=mod, c=original_connect, t=original_tx: (setattr(m, "connect", c), setattr(m, "transaction", t)))
+    patch(db, "connection", connection_w)
+    patch(db, "transaction", tx_w)
 
     if phase == "upload":
         patch(store, "verify", timed(store.verify, "dedup_read"))
@@ -189,12 +192,7 @@ def instrumented(svc: Services, prof: Profiler, *, phase: str) -> Iterator[None]
 # ---------------------------------------------------------------- pipeline benchmark
 
 def _db_bytes(settings: Settings) -> int:
-    conn = connect(settings.db_path)
-    try:
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    finally:
-        conn.close()
-    return settings.db_path.stat().st_size
+    return SqliteDatabase(settings).checkpoint_and_size()
 
 
 def _stage_report(prof: Profiler, total: float) -> tuple[dict, dict]:
@@ -249,13 +247,10 @@ def run_pipeline_iteration(spec: BenchmarkSpec, cdc: CDCConfig, iteration: int) 
                              "seconds_per_mib": seconds_per_mib(result.size, total),
                              "stages_seconds": stages, "stages_percent": pct, "integrity_verified": ok})
 
-        stats = compute_stats(settings, svc.store)
+        stats = compute_stats(settings, svc.store, svc.db, svc.repo)
         db_total = _db_bytes(settings)
-        conn = connect(settings.db_path)
-        try:
-            manifest_rows = conn.execute("SELECT COUNT(*) FROM file_chunks").fetchone()[0]
-        finally:
-            conn.close()
+        with svc.db.connection() as conn:
+            manifest_rows = svc.repo.count_rows(conn, "file_chunks")
         generated = sum(u["chunk_count"] for u in uploads)
         storage = {
             "logical_bytes": stats.logical_bytes, "unique_chunk_bytes": stats.unique_chunk_bytes,

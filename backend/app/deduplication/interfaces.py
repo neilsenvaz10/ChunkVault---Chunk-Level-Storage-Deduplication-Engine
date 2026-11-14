@@ -5,7 +5,7 @@ Implementations: ``deduplication/manager.py`` and ``deduplication/upload.py``.
 
 from __future__ import annotations
 
-import sqlite3
+from app.database.interfaces import Conn
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import BinaryIO, Protocol
@@ -36,6 +36,28 @@ class InsufficientStorageError(UploadError):
 
     code = "insufficient_storage"
     status_code = 507
+
+class UploadDeadlineError(UploadError):
+    """The upload did not finish within the configured deadline (``upload_deadline_seconds``). Nothing was committed: the file is
+    'failed', and the chunks this upload had registered were removed again (or, if that could not complete in the cleanup budget, left in
+    the durable 'deleting' state for garbage collection)."""
+
+    code = "upload_timeout"
+    status_code = 504
+
+
+class QuotaExceededError(InsufficientStorageError):
+    """The upload would take the application-level storage quota (``stored_bytes_cap``, 300 MiB by default) over its limit.
+    This is the application's own accounting of unique chunk bytes, not the cloud provider's project-wide limits."""
+
+    code = "storage_quota_exceeded"
+    status_code = 507
+
+    def __init__(self, used_bytes: int, needed_bytes: int, quota_bytes: int) -> None:
+        super().__init__("the application storage quota would be exceeded; nothing from this upload was kept",
+                         details={"quota_bytes": quota_bytes, "used_bytes": used_bytes, "required_new_bytes": needed_bytes,
+                                  "available_bytes": max(0, quota_bytes - used_bytes), "advisory": False})
+
 
 
 class ChunkIdentityConflictError(UploadError):
@@ -84,7 +106,7 @@ class UploadResult:
 
 
 class DeduplicationManager(Protocol):
-    def decide(self, conn: sqlite3.Connection, chunk_hash: str, size_bytes: int) -> ChunkDecision:
+    def decide(self, conn: Conn, chunk_hash: str, size_bytes: int) -> ChunkDecision:
         """Classify a chunk from metadata AND verified bytes.
 
         Raises ``ChunkIdentityConflictError`` on a size mismatch for a known hash,

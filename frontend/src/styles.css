@@ -461,3 +461,9 @@ td.actions > *:last-child { margin-right: 0; }
 .step-pill.active .stage-no { background: var(--accent-strong); }
 .chart details { overflow-x: auto; }
 @media (max-width: 480px) { .crumbs > span { display: none; } .topbar { flex-wrap: nowrap; } .topbar-right { flex-wrap: nowrap; } }
+
+/* Public cloud demo: notice banner and in-memory token entry (rendered only when VITE_CHUNKVAULT_MODE=cloud). */
+.demo-banner { padding: var(--s2) var(--s4); background: var(--warn-soft); border-bottom: 1px solid var(--warn); color: inherit; font-size: 0.9rem; }
+.token-entry { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); padding: var(--s2) var(--s4); border-bottom: 1px solid var(--line); background: var(--panel2); }
+.token-entry label { display: flex; align-items: center; gap: var(--s2); }
+.token-entry input { min-width: 16rem; }

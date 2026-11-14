@@ -17,6 +17,10 @@ class ChunkState(StrEnum):
     PENDING = "pending"
     STORED = "stored"
     CORRUPT = "corrupt"
+    DELETING = "deleting"  # CLOUD ONLY: claimed by garbage collection; the SQLite schema rejects it
+
+
+CLOUD_ONLY_CHUNK_STATES = frozenset({ChunkState.DELETING})
 
 
 class OperationType(StrEnum):

@@ -1,12 +1,13 @@
-"""Storage statistics computed from real SQLite rows and the real filesystem."""
+"""Storage statistics computed from real metadata rows and the real chunk store."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from app.core.config import Settings
-from app.database.connection import connect
+from app.database.factory import build_database, build_repository
+from app.database.interfaces import Database
+from app.database.repository import MetadataRepository
 from app.storage.filesystem import FilesystemChunkStore
 
 
@@ -29,32 +30,23 @@ class StorageStats:
     staging_bytes: int
 
 
-def compute_stats(settings: Settings, store: FilesystemChunkStore) -> StorageStats:
-    conn = connect(settings.db_path)
-    try:
-        conn.execute("BEGIN")
-        files, logical = conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(original_size),0) FROM files WHERE status='complete'").fetchone()
-        refs = conn.execute(
-            "SELECT COUNT(*) FROM file_chunks fc JOIN files f USING(file_id) WHERE f.status='complete'"
-        ).fetchone()[0]
-        uniq, uniq_bytes = conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM chunks WHERE hash IN "
-            "(SELECT fc.chunk_hash FROM file_chunks fc JOIN files f USING(file_id) WHERE f.status='complete')"
-        ).fetchone()
-        unref, unref_bytes = conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM chunks WHERE ref_count=0").fetchone()
-        conn.execute("COMMIT")
-    finally:
-        conn.close()
-
-    db_bytes = 0
-    for suffix in ("", "-wal", "-shm"):
-        try:
-            db_bytes += Path(str(settings.db_path) + suffix).stat().st_size
-        except OSError:
-            pass
-    chunk_files, chunk_bytes = store.disk_usage()
+def compute_stats(settings: Settings, store: FilesystemChunkStore, db: Database | None = None,
+                  repo: MetadataRepository | None = None) -> StorageStats:
+    """``db``/``repo`` default to the ones the configured backend builds (callers inside the app pass their own)."""
+    db = db or build_database(settings)
+    repo = repo or build_repository(settings)
+    with db.connection() as conn, db.snapshot(conn):  # one consistent read of all the aggregates
+        t = repo.storage_totals(conn)
+    files, logical, refs = t.files, t.logical_bytes, t.references
+    uniq, uniq_bytes = t.unique_chunks, t.unique_chunk_bytes
+    unref, unref_bytes = t.unreferenced_chunks, t.unreferenced_chunk_bytes
+    db_bytes = db.footprint_bytes()
+    if getattr(store, "remote", False):
+        # Remote store: never list the whole bucket on a request. 'Stored' chunk rows are the recorded inventory; the explicit
+        # audit compares it with the object store.
+        chunk_files, chunk_bytes = t.stored_chunks, t.stored_chunk_bytes
+    else:
+        chunk_files, chunk_bytes = store.disk_usage()
     staging_files = staging_bytes = 0
     for p in store.iter_staged():
         try:

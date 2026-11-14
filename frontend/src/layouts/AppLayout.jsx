@@ -2,7 +2,9 @@ import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { PageHeader, StatusBadge } from '../components/ui'
+import { ConfigProblem, DemoBanner, TokenEntry, WakeNotice } from '../components/CloudAccess'
 import { useHealth } from '../hooks/useApi'
+import { isCloudMode } from '../config/mode'
 import { NAV_GROUPS, moduleFor } from '../utils/navigation'
 
 function readCollapsed() {
@@ -60,6 +62,7 @@ export default function AppLayout() {
                   <Icon name={m.icon} />
                   <span className="nav-label">{m.label}</span>
                   {!m.implemented && <i title={`Planned for phase ${m.phase}`}>P{m.phase}</i>}
+                  {isCloudMode() && m.cloudAvailable === false && <i title="Not available in the public demo">local</i>}
                 </NavLink>
               ))}
             </div>
@@ -71,6 +74,7 @@ export default function AppLayout() {
         </button>
       </aside>
       <div className="main">
+        <DemoBanner />
         <header className="topbar">
           <div className="topbar-left">
             <button className="menu-btn" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} aria-controls="primary-nav"
@@ -88,6 +92,9 @@ export default function AppLayout() {
             <HealthIndicator />
           </div>
         </header>
+        <ConfigProblem />
+        <WakeNotice />
+        <TokenEntry />
         <main className="content" id="main-content" tabIndex={-1}>
           {mod && (
             <PageHeader

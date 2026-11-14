@@ -28,18 +28,19 @@ from __future__ import annotations
 
 import os
 import re
-import sqlite3
 import unicodedata
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
 from app.chunking.interfaces import Chunker
-from app.core.config import Settings
+from app.core.config import CloudSettings, Settings
 from app.core.diskfull import is_disk_full
-from app.core.errors import ChunkVaultError
+from app.deduplication.cloud_upload import CloudUploadPipeline
+from app.core.errors import ChunkVaultError, ConcurrentConflictError, is_concurrency_conflict
 from app.core.locking import WriterLock
-from app.database.connection import connect, transaction
+from app.database.interfaces import Database
 from app.database.repository import MetadataRepository
 from app.database.states import ChunkState, FileStatus, OperationStatus, OperationType
 from app.deduplication.interfaces import (
@@ -78,6 +79,19 @@ def _no_checkpoint(_name: str) -> None:
     return None
 
 
+@dataclass
+class _Ingest:
+    """What the chunk phase produced, ready for the metadata transaction."""
+
+    manifest: list[tuple[int, str, int]]
+    outcomes: list[ChunkOutcome]
+    to_register: list[tuple[str, int]]  # chunks whose rows must be 'stored' once the manifest commits
+    known: dict[str, int]
+    new_chunks: int
+    duplicate_chunks: int
+    bytes_written: int
+
+
 class Uploader:
     # Named points in the protocol (staged, t1_committed, chunk_published, chunks_ready,
     # in_t2, after_commit). Production leaves this a no-op; the isolated fault lab and tests
@@ -87,98 +101,69 @@ class Uploader:
     def __init__(
         self,
         settings: Settings,
+        db: Database,
         repo: MetadataRepository,
         store: FilesystemChunkStore,
         chunker: Chunker,
         dedup: DeduplicationManager,
         hasher: Sha256Service,
         lock: WriterLock,
+        cloud: CloudSettings | None = None,
     ) -> None:
-        self._s, self._repo, self._store = settings, repo, store
+        self._s, self._db, self._repo, self._store = settings, db, repo, store
         self._chunker, self._dedup, self._hasher, self._lock = chunker, dedup, hasher, lock
+        self._cloud = cloud  # None = local backend (sequential, filesystem); set = cloud pipeline
+        self._pipeline = (CloudUploadPipeline(self, settings, db, repo, store, chunker, hasher, lock, cloud) if cloud is not None else None)
 
     def upload(self, filename: str, stream: BinaryIO) -> UploadResult:
         name = sanitize_filename(filename)
+        if self._pipeline is not None:  # cloud: stage and chunk BEFORE taking the writer lock (see cloud_upload.py)
+            return self._pipeline.upload(name, stream)
         with self._lock.acquire():
             return self._upload_locked(name, stream)
 
     # -- internals -----------------------------------------------------------
 
     def _upload_locked(self, name: str, stream: BinaryIO) -> UploadResult:
+        with self._db.connection() as conn:  # always returned/closed, also on failure
+            return self._upload_on(conn, name, stream)
+
+    def _upload_on(self, conn, name: str, stream: BinaryIO) -> UploadResult:
         file_id = uuid.uuid4().hex
         part = self._store.staging_dir / f"upload-{file_id}.part"
-        conn = connect(self._s.db_path)
         op_id: int | None = None
         file_row_created = False
-        published: list[str] = []  # chunks THIS upload created on disk
+        published: list[str] = []  # chunks THIS upload created in the store (local backend only; see _cleanup_failure)
         try:
             size, whole_sha = self._stage_upload(stream, part)
             self.checkpoint("staged")
             self._check_free_space(conn, part, size)
-            with transaction(conn):  # T1
+            with self._db.transaction(conn):  # T1
                 self._repo.create_file(conn, file_id, name, size)
                 file_row_created = True
                 op_id = self._repo.start_operation(conn, OperationType.UPLOAD, file_id)
             self.checkpoint("t1_committed")
 
-            manifest: list[tuple[int, str, int]] = []
-            outcomes: list[ChunkOutcome] = []
-            known: dict[str, int] = {}  # hash -> size, for chunks seen in this upload
-            to_register: list[tuple[str, int]] = []
-            new_chunks = duplicate_chunks = bytes_written = 0
-            with open(part, "rb") as src:
-                for chunk in self._chunker.chunk_stream(src):
-                    h = self._hasher.digest(chunk.data)
-                    if h in known:
-                        if known[h] != chunk.size:
-                            raise ChunkIdentityConflictError("same digest with different sizes inside one file")
-                        duplicate_chunks += 1
-                        label = "repeated_in_file"
-                    else:
-                        decision = self._dedup.decide(conn, h, chunk.size)
-                        known[h] = chunk.size
-                        label = {ChunkDecision.NEW: "new", ChunkDecision.DUPLICATE: "reused",
-                                 ChunkDecision.ADOPT: "adopted"}[decision]
-                        if decision is ChunkDecision.DUPLICATE:
-                            duplicate_chunks += 1
-                        else:
-                            to_register.append((h, chunk.size))
-                            if decision is ChunkDecision.NEW:
-                                staged = self._store.stage(h, chunk.data)
-                                try:
-                                    created = self._store.publish(staged)
-                                except Exception:
-                                    self._store.discard(staged)  # e.g. disk full: do not leave the temp file in staging
-                                    raise
-                                if created:
-                                    published.append(h)
-                                self.checkpoint("chunk_published")
-                                bytes_written += chunk.size
-                                new_chunks += 1
-                            else:  # ADOPT
-                                duplicate_chunks += 1
-                    manifest.append((chunk.index, h, chunk.size))
-                    outcomes.append(ChunkOutcome(chunk.index, h, chunk.size, label))
-
-            if sum(m[2] for m in manifest) != size:
+            ingest = self._ingest_chunks(conn, part, published)
+            if sum(m[2] for m in ingest.manifest) != size:
                 raise UploadError("chunk sizes do not add up to the uploaded size")
             self.checkpoint("chunks_ready")
-            for h in known:  # step 5: everything the manifest needs is on disk
+            for h in ingest.known:  # step 5: everything the manifest needs is on disk
                 if not self._store.exists(h):
                     raise UploadError("a required chunk is missing before metadata commit")
 
-            with transaction(conn):  # T2: the only place a file becomes 'complete'
-                for h, csize in to_register:
+            with self._db.transaction(conn):  # T2: the only place a file becomes 'complete'
+                for h, csize in ingest.to_register:
                     self._repo.register_chunk(conn, h, csize, ChunkState.STORED)
                 self.checkpoint("in_t2")
-                for index, h, csize in manifest:
+                for index, h, csize in ingest.manifest:
                     self._repo.append_file_chunk(conn, file_id, index, h, csize)
                 self._repo.set_file_status(conn, file_id, FileStatus.COMPLETE, sha256=whole_sha)
                 self._repo.finish_operation(conn, op_id, OperationStatus.SUCCEEDED)
             self.checkpoint("after_commit")
             part.unlink(missing_ok=True)  # step 7: the file is durable in the store now
-            return UploadResult(file_id, name, size, whole_sha, len(manifest),
-                                new_chunks, duplicate_chunks, bytes_written, tuple(outcomes))
+            return UploadResult(file_id, name, size, whole_sha, len(ingest.manifest), ingest.new_chunks,
+                                ingest.duplicate_chunks, ingest.bytes_written, tuple(ingest.outcomes))
         except Exception as exc:
             disk_full = is_disk_full(exc)
             self._cleanup_failure(conn, file_id, file_row_created, op_id, published, exc)
@@ -190,12 +175,52 @@ class Uploader:
                 ) from exc
             if isinstance(exc, ChunkVaultError):
                 raise
+            if is_concurrency_conflict(exc):
+                raise ConcurrentConflictError("a concurrent operation conflicted with this upload; nothing was committed, retry") from exc
             raise UploadError("upload failed and was rolled back") from exc
-        finally:
-            try:
-                conn.close()
-            except sqlite3.Error:
-                pass
+
+    # -- chunk phase: local (sequential, filesystem) ------------------------------------------------------------
+
+    def _ingest_chunks(self, conn, part: Path, published: list[str]) -> "_Ingest":
+        manifest: list[tuple[int, str, int]] = []
+        outcomes: list[ChunkOutcome] = []
+        known: dict[str, int] = {}  # hash -> size, for chunks seen in this upload
+        to_register: list[tuple[str, int]] = []
+        new_chunks = duplicate_chunks = bytes_written = 0
+        with open(part, "rb") as src:
+            for chunk in self._chunker.chunk_stream(src):
+                h = self._hasher.digest(chunk.data)
+                if h in known:
+                    if known[h] != chunk.size:
+                        raise ChunkIdentityConflictError("same digest with different sizes inside one file")
+                    duplicate_chunks += 1
+                    label = "repeated_in_file"
+                else:
+                    decision = self._dedup.decide(conn, h, chunk.size)
+                    known[h] = chunk.size
+                    label = {ChunkDecision.NEW: "new", ChunkDecision.DUPLICATE: "reused",
+                             ChunkDecision.ADOPT: "adopted"}[decision]
+                    if decision is ChunkDecision.DUPLICATE:
+                        duplicate_chunks += 1
+                    else:
+                        to_register.append((h, chunk.size))
+                        if decision is ChunkDecision.NEW:
+                            staged = self._store.stage(h, chunk.data)
+                            try:
+                                created = self._store.publish(staged)
+                            except Exception:
+                                self._store.discard(staged)  # e.g. disk full: do not leave the temp file in staging
+                                raise
+                            if created:
+                                published.append(h)
+                            self.checkpoint("chunk_published")
+                            bytes_written += chunk.size
+                            new_chunks += 1
+                        else:  # ADOPT
+                            duplicate_chunks += 1
+                manifest.append((chunk.index, h, chunk.size))
+                outcomes.append(ChunkOutcome(chunk.index, h, chunk.size, label))
+        return _Ingest(manifest, outcomes, to_register, known, new_chunks, duplicate_chunks, bytes_written)
 
     def _margin(self, size: int) -> int:
         """Extra bytes to keep free on top of the chunk bytes: the configured reserve, one chunk in flight in
@@ -269,7 +294,9 @@ class Uploader:
             (self._store.staging_dir / f"upload-{file_id}.part").unlink(missing_ok=True)
         except OSError:
             pass
-        for h in published:
+        # A local store un-publishes chunks this upload created that no metadata references. The cloud store never deletes as
+        # failure cleanup: such objects keep their 'pending' rows (counted by the quota) until explicit, authenticated GC.
+        for h in (published if getattr(self._store, "deletes_on_failed_upload", True) else ()):
             try:
                 row = self._repo.get_chunk(conn, h)
                 if row is None:  # no metadata references it: safe to un-publish
@@ -277,7 +304,7 @@ class Uploader:
             except Exception:
                 pass
         try:
-            with transaction(conn):
+            with self._db.transaction(conn):
                 if file_row_created:
                     self._repo.set_file_status(conn, file_id, FileStatus.FAILED)
                 if op_id is not None:

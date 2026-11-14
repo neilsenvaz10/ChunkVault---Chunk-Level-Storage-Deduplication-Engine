@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { Card, ConfirmDialog, ErrorNotice, MetricTile, StatusBadge } from '../components/ui'
 import { api } from '../services/api'
 import { formatInt } from '../utils/format'
+import { AdminOnly } from '../components/CloudAccess'
+import { isCloudMode } from '../config/mode'
 
 // What each finding means, and what an explicit reconcile would do about it.
 export const FINDING_INFO = {
@@ -95,7 +97,7 @@ function Findings({ report }) {
   )
 }
 
-export default function ReliabilityPage() {
+function ReliabilityPageInner() {
   const [audit, setAudit] = useState({ status: 'idle', report: null, error: null })
   const [confirm, setConfirm] = useState(false)
   const [rec, setRec] = useState({ status: 'idle', result: null, error: null })
@@ -194,4 +196,10 @@ export default function ReliabilityPage() {
       </Card>
     </>
   )
+}
+
+// Administrative controls are not offered in the public cloud demo (the browser never holds an administrator token).
+export default function ReliabilityPage() {
+  if (isCloudMode()) return <AdminOnly what="Integrity audit and reconciliation" />
+  return <ReliabilityPageInner />
 }

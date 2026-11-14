@@ -35,6 +35,7 @@ class IntegrityCheckResponse(BaseModel):
     files_checked: int = Field(ge=0)
     findings: list[IntegrityFinding]
     counts_by_kind: dict[str, int]
+    notes: list[str] = Field(default_factory=list, description="Scope of the check, e.g. how many chunks were hash-verified (cloud).")
 
 
 class RepairActionModel(BaseModel):

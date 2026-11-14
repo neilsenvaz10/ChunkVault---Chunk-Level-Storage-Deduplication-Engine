@@ -41,6 +41,7 @@ class DeleteFileResponse(BaseModel):
     chunks_reclaimed: int = Field(ge=0, description="Chunk files physically deleted (ref_count reached 0).")
     bytes_reclaimed: int = Field(ge=0)
     cleanup_failed: int = Field(ge=0, description="Unreferenced chunk files that could not be removed; reconciliation removes them.")
+    chunks_pending_gc: int = Field(default=0, ge=0, description="Cloud backend: chunks that became unreferenced and wait for explicit, authenticated garbage collection (nothing is deleted from the object store here).")
 
 
 class FileSummary(BaseModel):
@@ -80,7 +81,7 @@ class ChunkInfo(BaseModel):
     hash: str = Sha256Hex
     size_bytes: int = Field(gt=0)
     ref_count: int = Field(ge=0)
-    state: Literal["pending", "stored", "corrupt"]
+    state: Literal["pending", "stored", "corrupt", "deleting"]
     created_at: str
 
 

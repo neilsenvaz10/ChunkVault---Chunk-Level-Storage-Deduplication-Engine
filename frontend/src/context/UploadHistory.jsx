@@ -1,3 +1,4 @@
+import { isCloudMode } from '../config/mode'
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
 // Upload-time chunk decisions (new / reused / ...) are facts about ONE upload and are not
@@ -8,6 +9,7 @@ const KEY = 'chunkvault.uploadOutcomes.v1'
 const Ctx = createContext(null)
 
 function load() {
+  if (isCloudMode()) return {} // public demo: nothing about uploads is persisted in the browser, not even per session
   try {
     return JSON.parse(window.sessionStorage.getItem(KEY)) || {}
   } catch {
@@ -22,7 +24,7 @@ export function UploadHistoryProvider({ children }) {
     setByFile((prev) => {
       const next = { ...prev, [result.file_id]: result }
       try {
-        window.sessionStorage.setItem(KEY, JSON.stringify(next))
+        if (!isCloudMode()) window.sessionStorage.setItem(KEY, JSON.stringify(next))
       } catch {
         // storage unavailable: the in-memory copy still works
       }
@@ -34,7 +36,7 @@ export function UploadHistoryProvider({ children }) {
     setByFile((prev) => {
       const { [fileId]: _removed, ...rest } = prev
       try {
-        window.sessionStorage.setItem(KEY, JSON.stringify(rest))
+        if (!isCloudMode()) window.sessionStorage.setItem(KEY, JSON.stringify(rest))
       } catch {
         // ignore
       }

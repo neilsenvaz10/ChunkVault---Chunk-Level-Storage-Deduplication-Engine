@@ -5,7 +5,7 @@ import pytest
 from app.core.errors import DatabaseError
 from app.database.connection import connect, transaction
 from app.database.init import SCHEMA_VERSION, get_schema_version, initialize_database
-from app.database.states import ChunkState, FileStatus, OperationStatus, OperationType
+from app.database.states import CLOUD_ONLY_CHUNK_STATES, ChunkState, FileStatus, OperationStatus, OperationType
 from tests.conftest import H1, H2, add_chunk, add_file, map_chunk, ref_count
 
 SHA = "d" * 64
@@ -196,6 +196,10 @@ def test_state_enums_match_check_constraints(db):
     with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
         add_file(db, "bad", status="weird")
     for i, s in enumerate(ChunkState):
+        if s in CLOUD_ONLY_CHUNK_STATES:  # exists only in the PostgreSQL schema: the local schema must refuse it
+            with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+                add_chunk(db, f"{i:064x}", state=s.value)
+            continue
         add_chunk(db, f"{i:064x}", state=s.value)
     with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
         add_chunk(db, H2, state="weird")

@@ -4,7 +4,7 @@ import time
 
 from app.core.config import Settings
 from app.core.locking import WriterLock
-from app.database.connection import connect, transaction
+from app.database.interfaces import Database
 from app.database.repository import MetadataRepository
 from app.database.states import FileStatus, OperationStatus, OperationType
 from app.reliability.auditor import Auditor, parse_ts
@@ -14,9 +14,15 @@ from app.storage.interfaces import ChunkStoreError
 
 
 class ReconcilerImpl:
-    def __init__(self, settings: Settings, repo: MetadataRepository, store: FilesystemChunkStore,
-                 auditor: Auditor, lock: WriterLock) -> None:
-        self._s, self._repo, self._store, self._auditor, self._lock = settings, repo, store, auditor, lock
+    def __init__(self, settings: Settings, db: Database, repo: MetadataRepository, store: FilesystemChunkStore,
+                 auditor: Auditor, lock: WriterLock, reclaim_chunks: bool = True,
+                 inflight_grace_seconds: float | None = None) -> None:
+        self._s, self._db, self._repo, self._store, self._auditor, self._lock = settings, db, repo, store, auditor, lock
+        # False for the cloud backend: chunk rows/objects are reclaimed only by explicit, authenticated garbage collection
+        self._reclaim = reclaim_chunks
+        # cloud: an 'uploading' file or a 'running' operation younger than this may belong to live work (the writer lock can be lost
+        # without its holder noticing), so it is left alone. None (local backend) = the original behaviour.
+        self._grace = inflight_grace_seconds
 
     def reconcile(self) -> ReconciliationReport:
         actions: list[RepairAction] = []
@@ -34,11 +40,12 @@ class ReconcilerImpl:
                     actions.append(RepairAction("delete_staging_file", p.name, "removed leftover staging file"))
                 except OSError as exc:
                     actions.append(RepairAction("delete_staging_file_failed", p.name, str(exc.strerror or exc)))
-            conn = connect(self._s.db_path)
-            try:
-                with transaction(conn):
+            with self._db.connection() as conn:
+                with self._db.transaction(conn):
                     # 2. operations stuck in 'running' (restores only once stale)
                     for op in self._repo.list_running_operations(conn):
+                        if self._grace is not None and now - parse_ts(op.started_at) < self._grace:
+                            continue
                         if op.operation_type is OperationType.RESTORE and now - parse_ts(op.started_at) < stale:
                             continue
                         self._repo.finish_operation(conn, op.operation_id, OperationStatus.ABORTED,
@@ -47,22 +54,25 @@ class ReconcilerImpl:
                                                     f"{op.operation_type.value} operation marked aborted"))
                     # 3. files stuck in 'uploading' can never complete (we hold the writer lock)
                     for f in self._repo.list_stuck_files(conn):
+                        if self._grace is not None and now - parse_ts(f.created_at) < self._grace:
+                            continue
                         self._repo.set_file_status(conn, f.file_id, FileStatus.FAILED)
                         actions.append(RepairAction("fail_incomplete_file", f.file_id,
                                                     "file stuck in 'uploading' marked failed"))
-                    # 4. metadata of unreferenced chunks (ref_count 0)
-                    candidates = [c.hash for c in self._repo.unreferenced_chunks(conn)]
-                    removed_rows = self._repo.delete_unreferenced_chunk_rows(conn, candidates)
-                    row_hashes = {c.hash for c in self._repo.list_chunks(conn, -1, 0)}
+                    # 4. metadata of unreferenced chunks (ref_count 0) -- local backend only
+                    removed_rows, row_hashes = [], set()
+                    if self._reclaim:
+                        candidates = [c.hash for c in self._repo.unreferenced_chunks(conn)]
+                        removed_rows = self._repo.delete_unreferenced_chunk_rows(conn, candidates)
+                        row_hashes = {c.hash for c in self._repo.list_chunks(conn, -1, 0)}
                 for h in removed_rows:
                     actions.append(RepairAction("delete_unreferenced_chunk_row", h, "ref_count was 0"))
                 # 5. bytes: after the metadata commit, delete chunk files nobody references
-                for h in sorted(set(removed_rows) | {x for x in self._store.iter_hashes() if x not in row_hashes}):
+                for h in (sorted(set(removed_rows) | {x for x in self._store.iter_hashes() if x not in row_hashes}) if self._reclaim else ()):
                     try:
                         if self._store.delete(h):
                             actions.append(RepairAction("delete_orphan_chunk", h, "no metadata row references it"))
                     except ChunkStoreError as exc:
                         actions.append(RepairAction("delete_orphan_chunk_failed", h, exc.message))
-            finally:
-                conn.close()
-        return ReconciliationReport(actions=actions, remaining=self._auditor.verify_store())
+        # cloud: the report after repair is metadata-only (the full remote audit is its own explicit, admin-only call)
+        return ReconciliationReport(actions=actions, remaining=self._auditor.verify_store(True if self._reclaim else False))

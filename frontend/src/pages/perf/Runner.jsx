@@ -3,10 +3,12 @@ import { AsyncState, Card, ErrorNotice } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { api } from '../../services/api'
 import { formatBytes } from '../../utils/format'
+import { AdminOnly } from '../../components/CloudAccess'
+import { isCloudMode } from '../../config/mode'
 
 const POLL_MS = 1000
 
-export default function Runner({ onFinished }) {
+function RunnerInner({ onFinished }) {
   const catalog = useApi((signal) => api.benchmarkCatalog(signal))
   const [form, setForm] = useState({ kind: 'pipeline', workload: 'identical', sizeKiB: 128, iterations: 3, seed: 1 })
   const [job, setJob] = useState(null) // {id, status, progress}
@@ -129,4 +131,10 @@ export default function Runner({ onFinished }) {
       </AsyncState>
     </Card>
   )
+}
+
+// Administrative controls are not offered in the public cloud demo (the browser never holds an administrator token).
+export default function Runner(props) {
+  if (isCloudMode()) return <AdminOnly what="Benchmark runs" />
+  return <RunnerInner {...props}/>
 }

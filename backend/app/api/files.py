@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 import uuid
 from typing import Annotated
 
@@ -8,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Path, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
+from app.database.interfaces import Conn
 from app.api.deps import get_db, get_services
 from app.core.services import Services
 from app.database.repository import FileNotFoundInMetadata
@@ -49,14 +49,9 @@ def upload_file(request: Request, file: UploadFile = File(...), svc: Services = 
 
 @router.get("", response_model=FileListResponse, summary="List files (newest first)")
 def list_files(limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0),
-               svc: Services = Depends(get_services), conn: sqlite3.Connection = Depends(get_db)):
+               svc: Services = Depends(get_services), conn: Conn = Depends(get_db)):
     files = svc.repo.list_files(conn, limit, offset)
-    counts = {}
-    if files:
-        marks = ",".join("?" * len(files))
-        counts = dict(conn.execute(
-            f"SELECT file_id, COUNT(*) FROM file_chunks WHERE file_id IN ({marks}) GROUP BY file_id",
-            [f.file_id for f in files]).fetchall())
+    counts = svc.repo.file_chunk_counts(conn, [f.file_id for f in files])
     return FileListResponse(items=[_summary(f, counts.get(f.file_id, 0)) for f in files],
                             total=svc.repo.count_files(conn), limit=limit, offset=offset)
 
@@ -64,7 +59,7 @@ def list_files(limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0
 @router.get("/{file_id}", response_model=FileDetailResponse, responses=_ERR,
             summary="File metadata and ordered chunk manifest")
 def get_file(file_id: FileId, svc: Services = Depends(get_services),
-             conn: sqlite3.Connection = Depends(get_db)):
+             conn: Conn = Depends(get_db)):
     f = svc.repo.get_file(conn, file_id)
     if f is None:
         raise FileNotFoundInMetadata("file not found")

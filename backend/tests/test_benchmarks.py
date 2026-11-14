@@ -190,14 +190,22 @@ def test_every_workload_runs_and_restores_exactly(workload, expect_reuse):
         assert r["storage"]["savings_percent"] == 0
 
 
-def test_instrumentation_is_removed_afterwards(identical_run):
+def test_instrumentation_is_removed_afterwards(identical_run, tmp_path):
+    from app.benchmarking.profiler import Profiler
+    from app.benchmarking.runner import instrumented
+    from app.core.config import Settings
     from app.core.services import build_services
-    from app.database.init import initialize_database
 
-    assert upload_mod.transaction.__module__ == "app.database.connection"
-    assert upload_mod.connect.__module__ == "app.database.connection"
-    assert restore_mod.transaction.__module__ == "app.database.connection"
-    assert restore_mod.connect.__module__ == "app.database.connection"
+    s = Settings(data_dir=tmp_path / "d", db_path=tmp_path / "d" / "i.db", cors_origins=("http://localhost:5173",))
+    s.ensure_directories()
+    svc = build_services(s)
+    svc.db.prepare_for_startup()
+    for phase in ("upload", "restore"):
+        with instrumented(svc, Profiler(), phase=phase):
+            assert "connection" in vars(svc.db) and "transaction" in vars(svc.db)  # timers installed
+        # the metadata timers are gone again: the database object uses its own methods
+        assert "connection" not in vars(svc.db) and "transaction" not in vars(svc.db)
+        assert "digest" not in vars(svc.hasher) and "create_file" not in vars(svc.repo)
 
 
 def test_benchmark_runs_leave_no_temporary_stores():

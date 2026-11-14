@@ -19,6 +19,9 @@ from __future__ import annotations
 import json
 
 _SAFE = {"GET", "HEAD", "OPTIONS"}
+# The platform's liveness probe may reach the service under whatever Host name the platform's infrastructure uses. That route returns a
+# constant, reads nothing and changes nothing, so a rebinding page gains nothing from it; every other route stays behind the allow-list.
+LIVENESS_PATH = "/api/health/live"
 
 
 def host_name(raw: str) -> str:
@@ -40,6 +43,9 @@ class LocalAccessGuard:
             await self.app(scope, receive, send)
             return
         headers = dict(scope["headers"])
+        if scope["method"] in ("GET", "HEAD") and scope["path"] == LIVENESS_PATH:
+            await self.app(scope, receive, send)
+            return
         if host_name(headers.get(b"host", b"").decode("latin-1")) not in self._hosts:
             await self._reject(send, 400, "host_not_allowed", "The Host header is not an allowed local address.")
             return

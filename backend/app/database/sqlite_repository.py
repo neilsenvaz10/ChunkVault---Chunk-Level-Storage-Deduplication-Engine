@@ -11,17 +11,24 @@ import sqlite3
 
 from app.database.repository import (
     ChunkRecord,
+    ChunkReference,
     ChunkSizeConflict,
     FileChunkRecord,
     FileNotFoundInMetadata,
     FileRecord,
+    INSPECTABLE_TABLES,
     OperationRecord,
     RepositoryError,
+    StorageTotals,
 )
 from app.database.states import ChunkState, FileStatus, OperationStatus, OperationType
 
 # Never trust the counter alone: a chunk is only reclaimable if NO manifest row uses it.
 _NO_MANIFEST_ROWS = "NOT EXISTS (SELECT 1 FROM file_chunks fc WHERE fc.chunk_hash = chunks.hash)"
+_TABLE_ORDER = {  # stable display order of the schema explorer
+    "files": "created_at DESC, file_id", "chunks": "hash", "file_chunks": "file_id, chunk_index",
+    "operations": "operation_id DESC",
+}
 _NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 
 
@@ -174,3 +181,106 @@ class SqliteMetadataRepository:
 
     def ref_count_mismatches(self, conn) -> list[tuple[str, int, int]]:
         return [(r[0], r[1], r[2]) for r in conn.execute("SELECT * FROM v_ref_count_mismatch")]
+
+    # -- read models for the API and statistics -------------------------------------------------------------
+
+    def file_chunk_counts(self, conn, file_ids) -> dict[str, int]:
+        if not file_ids:
+            return {}
+        marks = ",".join("?" * len(file_ids))
+        return dict(conn.execute(
+            f"SELECT file_id, COUNT(*) FROM file_chunks WHERE file_id IN ({marks}) GROUP BY file_id", list(file_ids)).fetchall())
+
+    def count_manifest_references(self, conn, chunk_hash) -> int:
+        return conn.execute("SELECT COUNT(*) FROM file_chunks WHERE chunk_hash=?", (chunk_hash,)).fetchone()[0]
+
+    def list_manifest_references(self, conn, chunk_hash, limit) -> list[ChunkReference]:
+        return [ChunkReference(r[0], r[1], r[2], r[3]) for r in conn.execute(
+            "SELECT fc.file_id, f.filename, f.status, fc.chunk_index FROM file_chunks fc "
+            "JOIN files f USING(file_id) WHERE fc.chunk_hash=? ORDER BY fc.file_id, fc.chunk_index LIMIT ?",
+            (chunk_hash, limit)).fetchall()]
+
+    def storage_totals(self, conn) -> StorageTotals:
+        files, logical = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(original_size),0) FROM files WHERE status='complete'").fetchone()
+        refs = conn.execute(
+            "SELECT COUNT(*) FROM file_chunks fc JOIN files f USING(file_id) WHERE f.status='complete'").fetchone()[0]
+        uniq, uniq_bytes = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM chunks WHERE hash IN "
+            "(SELECT fc.chunk_hash FROM file_chunks fc JOIN files f USING(file_id) WHERE f.status='complete')").fetchone()
+        unref, unref_bytes = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM chunks WHERE ref_count=0").fetchone()
+        stored, stored_bytes = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM chunks WHERE state='stored'").fetchone()
+        return StorageTotals(files, logical, refs, uniq, uniq_bytes, unref, unref_bytes, stored, stored_bytes)
+
+    def count_rows(self, conn, table) -> int:
+        if table not in INSPECTABLE_TABLES:
+            raise ValueError("table is not inspectable")
+        return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # table is whitelisted above
+
+    def list_rows(self, conn, table, limit, offset):
+        if table not in INSPECTABLE_TABLES:
+            raise ValueError("table is not inspectable")
+        cur = conn.execute(f"SELECT * FROM {table} ORDER BY {_TABLE_ORDER[table]} LIMIT ? OFFSET ?", (limit, offset))
+        return [d[0] for d in cur.description], [tuple(r) for r in cur.fetchall()]
+
+    # -- batched operations ----------------------------------------------------------------------------------
+
+    def get_chunks(self, conn, hashes) -> dict[str, ChunkRecord]:
+        out: dict[str, ChunkRecord] = {}
+        unique = list(dict.fromkeys(hashes))
+        for i in range(0, len(unique), 500):  # stay below SQLite's variable limit
+            part = unique[i:i + 500]
+            marks = ",".join("?" * len(part))
+            for r in conn.execute(f"SELECT * FROM chunks WHERE hash IN ({marks})", part):
+                out[r["hash"]] = _chunk(r)
+        return out
+
+    def register_chunks(self, conn, items, state=ChunkState.PENDING) -> list[str]:
+        created = []
+        for h, size in items:
+            _, was_created = self.register_chunk(conn, h, size, state)
+            if was_created:
+                created.append(h)
+        return created
+
+    def mark_chunks_state(self, conn, hashes, state: ChunkState) -> None:
+        for h in hashes:
+            self.mark_chunk_state(conn, h, state)
+
+    def append_file_chunks(self, conn, file_id, rows) -> None:
+        for index, h, size in rows:
+            self.append_file_chunk(conn, file_id, index, h, size)
+
+    def chunk_bytes_total(self, conn) -> int:
+        return conn.execute("SELECT COALESCE(SUM(size_bytes),0) FROM chunks").fetchone()[0]
+
+    def gc_candidates(self, conn, older_than_seconds, limit) -> list[ChunkRecord]:
+        return [_chunk(r) for r in conn.execute(
+            f"SELECT * FROM chunks WHERE ref_count=0 AND {_NO_MANIFEST_ROWS} "
+            "AND created_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?) ORDER BY created_at, hash LIMIT ?",
+            (f"-{float(older_than_seconds)} seconds", limit))]
+
+    # -- cloud coordination: not part of the local backend ---------------------------------------------------------
+
+    def _cloud_only(self, name: str):
+        raise NotImplementedError(f"{name} belongs to the cloud backend; the local store reclaims through reconciliation")
+
+    def reserve_chunks(self, conn, items, cap_bytes):
+        self._cloud_only("reserve_chunks")
+
+    def lock_chunks_for_reference(self, conn, hashes):
+        self._cloud_only("lock_chunks_for_reference")
+
+    def claim_chunks_for_deletion(self, conn, older_than_seconds, limit):
+        self._cloud_only("claim_chunks_for_deletion")
+
+    def release_deleted_chunks(self, conn, hashes):
+        self._cloud_only("release_deleted_chunks")
+
+    def complete_file(self, conn, file_id, sha256):
+        self._cloud_only("complete_file")
+
+    def claim_pending_chunks(self, conn, hashes):
+        self._cloud_only("claim_pending_chunks")

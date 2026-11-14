@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from app.core.config import Settings
 from app.core.locking import WriterLock
-from app.database.connection import connect, transaction
+from app.database.interfaces import Database
 from app.database.repository import FileNotFoundInMetadata, MetadataRepository
 from app.database.states import OperationStatus, OperationType
 from app.storage.filesystem import FilesystemChunkStore
@@ -29,27 +29,32 @@ class DeleteResult:
     chunks_reclaimed: int  # chunk files physically deleted
     bytes_reclaimed: int
     cleanup_failed: int  # unreferenced chunk files that could not be removed (left as orphans)
+    chunks_pending_gc: int = 0  # cloud: unreferenced chunks left for explicit garbage collection
 
 
 class FileDeleter:
-    def __init__(self, settings: Settings, repo: MetadataRepository, store: FilesystemChunkStore,
+    def __init__(self, settings: Settings, db: Database, repo: MetadataRepository, store: FilesystemChunkStore,
                  lock: WriterLock) -> None:
-        self._s, self._repo, self._store, self._lock = settings, repo, store, lock
+        self._s, self._db, self._repo, self._store, self._lock = settings, db, repo, store, lock
 
     def delete(self, file_id: str) -> DeleteResult:
         """Raises ``FileNotFoundInMetadata`` (404) if absent -- so a repeated
         delete is a clean, predictable 404 and changes nothing."""
         with self._lock.acquire():
-            conn = connect(self._s.db_path)
-            try:
-                with transaction(conn):
+            with self._db.connection() as conn:
+                with self._db.transaction(conn):
                     if self._repo.get_file(conn, file_id) is None:
                         raise FileNotFoundInMetadata("file not found")
                     released = len(self._repo.get_file_chunks(conn, file_id))
                     op_id = self._repo.start_operation(conn, OperationType.DELETE, file_id)
                     zero = self._repo.delete_file(conn, file_id)
-                    sizes = {h: self._repo.get_chunk(conn, h).size_bytes for h in zero}
-                    removed = self._repo.delete_unreferenced_chunk_rows(conn, zero)
+                    if getattr(self._store, "remote", False):
+                        # Cloud: metadata only. The now-unreferenced chunk rows (and their objects) are kept until an administrator
+                        # runs garbage collection; they still count toward the quota. A shared chunk is never touched here.
+                        sizes, removed = {}, []
+                    else:
+                        sizes = {h: self._repo.get_chunk(conn, h).size_bytes for h in zero}
+                        removed = self._repo.delete_unreferenced_chunk_rows(conn, zero)
                     self._repo.finish_operation(conn, op_id, OperationStatus.SUCCEEDED)
                 reclaimed = failed = reclaimed_bytes = 0
                 for h in removed:  # committed: now safe to remove bytes
@@ -59,6 +64,5 @@ class FileDeleter:
                         reclaimed_bytes += sizes[h]
                     except ChunkStoreError:
                         failed += 1
-                return DeleteResult(file_id, released, reclaimed, reclaimed_bytes, failed)
-            finally:
-                conn.close()
+                pending = len(zero) if getattr(self._store, "remote", False) else 0
+                return DeleteResult(file_id, released, reclaimed, reclaimed_bytes, failed, pending)

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { AsyncState, Card, StatusBadge } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { api } from '../../services/api'
+import { isCloudMode } from '../../config/mode'
 
 // Project annotations that OpenAPI cannot express. Everything else (routes, parameters,
 // request/response fields, status codes) is derived from FastAPI's generated /api/openapi.json.
@@ -97,7 +98,7 @@ export default function ApiExplorer() {
       <p className="muted">
         Routes, parameters, fields and status codes below are read live from the running server&rsquo;s <code>/api/openapi.json</code>.
         Only the &ldquo;backend component&rdquo; and &ldquo;reads / mutates&rdquo; columns are project annotations.{' '}
-        <a href="/api/docs" target="_blank" rel="noreferrer">Open the interactive FastAPI docs →</a>
+        {!isCloudMode() && <a href="/api/docs" target="_blank" rel="noreferrer">Open the interactive FastAPI docs →</a>}
       </p>
       <AsyncState state={spec} onRetry={() => spec.reload()} isEmpty={() => endpoints.length === 0} empty="The server exposes no /api endpoints.">
         {() => (

@@ -23,7 +23,7 @@ def _to_response(report: AuditReport) -> IntegrityCheckResponse:
     return IntegrityCheckResponse(
         healthy=report.healthy, chunks_checked=report.chunks_checked, files_checked=report.files_checked,
         findings=[IntegrityFinding(kind=f.kind, subject=f.subject, detail=f.detail) for f in report.findings],
-        counts_by_kind=dict(Counter(f.kind for f in report.findings)))
+        counts_by_kind=dict(Counter(f.kind for f in report.findings)), notes=list(report.notes))
 
 
 @router.post("/audit", response_model=IntegrityCheckResponse, responses={404: {"model": ErrorResponse}},

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sqlite3
+from app.database.interfaces import Conn
 
 from app.database.repository import MetadataRepository
 from app.database.states import ChunkState
@@ -21,7 +21,7 @@ class Deduplicator:
         self._repo = repo
         self._store = store
 
-    def decide(self, conn: sqlite3.Connection, chunk_hash: str, size_bytes: int) -> ChunkDecision:
+    def decide(self, conn: Conn, chunk_hash: str, size_bytes: int) -> ChunkDecision:
         row = self._repo.get_chunk(conn, chunk_hash)
         status = self._store.verify(chunk_hash, expected_size=None)
         if row is not None:
